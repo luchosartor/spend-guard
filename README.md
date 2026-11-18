@@ -76,6 +76,7 @@ The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier)
 
 ## What's intentionally left out (and why)
 
+- **Frontend.** Deliberately deferred — backend is what's being evaluated. The one screen it needs, when built: before running the seed, show the estimated cost and time (differs by `api`/`cli` provider) and what to expect caught/missed with AI configured vs. not; require an explicit confirm click before it can spend real credits (same intent as `/api/admin/seed`'s `?confirm=true` gate); then render the result once the run finishes.
 - **Auth, multi-tenant isolation beyond the company FK, pagination.** This is a single-analyst review tool for the exercise, not a multi-customer SaaS product — adding auth wouldn't have demonstrated anything about the detection problem itself.
 - **Feedback/retraining loop.** Capturing an analyst's approve/reject decision is already free (it's just a field on the flag). *Using* that history to recalibrate rule weights, or feeding the AI prompt few-shot examples of past verdicts, is a real follow-up project on its own — not built.
 - **Full boundary-value test matrix.** The core boundaries (z-score thresholds, the 5-history-item cutoff, identical-timestamp duplicates) are tested; every signal's window boundary (10 min / 30 min / 3 h, both sides) isn't.
