@@ -48,6 +48,23 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - A synthetic data generator with one planted anomaly of each type and measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use.
 - Fully containerized (Postgres + API), Java 21 throughout, zero manual JDK install anywhere.
 
+## Detection rules
+
+Rule engine, 0-100 per transaction (capped), each signal computed against that employee's own backward-looking history (never future-dated, regardless of DB insertion order):
+
+| Signal | Condition | Points |
+|---|---|---|
+| Amount z-score | vs. that employee+category's historical mean/stddev (needs 5+ prior same-category transactions, else skipped) | 0 if \|z\|<2, linear 0→30 for \|z\| in [2,4], 30 if \|z\|≥4 |
+| Velocity | 3+ transactions by the employee within a 10-min window | flat 20 |
+| Duplicate | same employee+merchant+amount within 30 min (including an identical-timestamp processor retry) | flat 25 |
+| Geo — impossible travel | a prior transaction in a different country within the last 3 hours | flat 25 |
+| Geo — first in country | employee's first-ever transaction in this country (not combined with the above) | flat 10 |
+| Policy | amount > merchant's policy limit (skipped if no limit) | flat 20 |
+
+**Escalation to AI** happens when either `rule_score >= threshold` (`20` for `STANDARD` companies, `10` for `PREMIUM`) **or** it's the employee's first-ever transaction with this merchant (novelty) — the novelty path is what lets a transaction that's clean on every signal above still reach the AI (see the semantic-mismatch plant in the seed data).
+
+**Combining the two:** `final_score = max(rule_score, ai_risk_score)` if the AI ran, else `final_score = rule_score`. A flag is created only if `final_score >= 50`.
+
 ## What's intentionally left out (and why)
 
 - **Auth, multi-tenant isolation beyond the company FK, pagination.** This is a single-analyst review tool for the exercise, not a multi-customer SaaS product — adding auth wouldn't have demonstrated anything about the detection problem itself.
@@ -56,6 +73,7 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - **Input validation richness** (positive-amount check, country code normalization, currency conversion) and **optimistic locking** on resolve — not needed for a single-operator demo with controlled synthetic data.
 - **A real card-processor integration.** In production this would be the processor's real-time authorization webhook (how Ramp/Brex/Jeeves itself actually gets transaction data) — never a monthly PDF statement, which is both too retrospective and too unstructured for fraud detection to act on in time.
 - **An MCP server** for conversational access to flags from Claude Desktop/Code — a legitimate extension, not core to the detection problem itself.
+- **`MerchantCategory` as a fixed 6-value enum, not real MCC codes.** In production, merchant category comes from the card network's MCC (Merchant Category Code) at authorization time — hundreds of standardized codes, not something a company defines itself. A fixed enum is a deliberate simplification to keep the demo data tractable; a real integration would map MCCs to broader buckets (or work with the raw code directly), and would include an `OTHER` catch-all for anything unmapped.
 
 ## Key decisions & trade-offs
 
