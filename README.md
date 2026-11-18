@@ -6,9 +6,25 @@ _(Problem statement, approach and demo instructions go here — filled in once t
 
 ## Running locally
 
+Everything runs in Docker — the only requirement is Docker itself.
+
 ```bash
-docker compose up -d   # Postgres on localhost:5433
-./gradlew bootRun      # API on :8080
+docker compose up --build   # Postgres on :5433, API on :8080
+```
+
+If you have an Anthropic API key and want the AI reviewer to actually call Claude, put it in a `.env` file next to `docker-compose.yml` (`ANTHROPIC_API_KEY=...`, gitignored, never committed) before running the command above — `docker compose` picks it up automatically. Without a key, detection still runs end-to-end on rules alone (the AI reviewer reports "unavailable" and the service falls back to rule-only scoring, by design).
+
+If `5433` or `8080` are already taken on your machine, override them in the same `.env` file (`DB_PORT=5434`, `APP_PORT=8091`, or any free ports) — no need to touch `docker-compose.yml`.
+
+**Note:** the AI reviewer's `cli` provider (shells out to the Claude Code CLI) only works when running the app directly on a host that has Claude Code installed and authenticated — not inside the app container. The `api` provider (the default) works either way.
+
+**If you're re-running this after pulling a schema change and already had the stack up before:** reset the Postgres volume once (`docker compose down -v`) before `docker compose up --build` again. `ddl-auto=update` can't safely add a new non-nullable column to a table that already has rows.
+
+For active development without rebuilding the image on every change:
+
+```bash
+docker compose up -d spend-guard-db   # just Postgres, on localhost:5433
+./gradlew bootRun                     # API on :8080 — any JDK on PATH, Java 21 toolchain auto-downloads if needed
 ```
 
 ## Development workflow: `coder` / `leader` agents

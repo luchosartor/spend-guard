@@ -9,7 +9,7 @@ version = '0.1.0'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -28,6 +28,10 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Boots a real (in-memory) persistence context in tests so a Hibernate metadata error - like
+    // the FK/column-name collision this was added to catch - fails ./gradlew test loudly instead
+    // of only surfacing against a live Postgres.
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {
