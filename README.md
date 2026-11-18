@@ -10,11 +10,11 @@ Everything runs in Docker — the only requirement is Docker itself.
 docker compose up --build   # Postgres on :5433, API on :8080
 ```
 
-If you have an Anthropic API key and want the AI reviewer to actually call Claude, put it in a `.env` file next to `docker-compose.yml` (`ANTHROPIC_API_KEY=...`, gitignored, never committed) before running the command above — `docker compose` picks it up automatically. Without a key, detection still runs end-to-end on rules alone (the AI reviewer reports "unavailable" and the service falls back to rule-only scoring, by design).
+If you have an Anthropic API key and want the AI reviewer to actually call Claude, put it in a `.env` file next to `docker-compose.yml` (`ANTHROPIC_API_KEY=...`, gitignored, never committed) before running the command above — `docker compose` picks it up automatically. Without a key, detection still runs end-to-end on rules alone (the AI reviewer reports "unavailable" and the service falls back to rule-only scoring, by design) — and if `spendguard.ai.provider=api` with no key set, this is logged as an explicit warning at startup, not just discovered silently on the first escalated transaction.
 
 If `5433` or `8080` are already taken on your machine, override them in the same `.env` file (`DB_PORT=5434`, `APP_PORT=8091`, or any free ports) — no need to touch `docker-compose.yml`.
 
-**Note:** the AI reviewer's `cli` provider (shells out to the Claude Code CLI) only works when running the app directly on a host that has Claude Code installed and authenticated — not inside the app container. The `api` provider (the default) works either way.
+**Note:** the AI reviewer's `cli` provider (shells out to the Claude Code CLI) only works when running the app directly on a host that has Claude Code installed and authenticated — not inside the app container. It exists strictly so this project can be evaluated end-to-end without first provisioning an Anthropic API key; it is **not a production-viable option** (shelling out per transaction doesn't scale, and it ties the service to one authenticated host). The `api` provider (the default) is what a real deployment would use, and works either way. If you already have a Claude subscription: a $100/month Claude Max plan also includes $100/month in API credits, so evaluating with the `api` provider may not cost anything beyond that subscription.
 
 **If you're re-running this after pulling a schema change and already had the stack up before:** reset the Postgres volume once (`docker compose down -v`) before `docker compose up --build` again. `ddl-auto=update` can't safely add a new non-nullable column to a table that already has rows.
 
@@ -64,6 +64,15 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 **Escalation to AI** happens when either `rule_score >= threshold` (`20` for `STANDARD` companies, `10` for `PREMIUM`) **or** it's the employee's first-ever transaction with this merchant (novelty) — the novelty path is what lets a transaction that's clean on every signal above still reach the AI (see the semantic-mismatch plant in the seed data).
 
 **Combining the two:** `final_score = max(rule_score, ai_risk_score)` if the AI ran, else `final_score = rule_score`. A flag is created only if `final_score >= 50`.
+
+**AI cost per escalated transaction** (Anthropic list pricing; `MAX_TOKENS=300` caps the output, actual output is usually smaller since the response is a short JSON object):
+
+| Plan | Model | Input $/1M tok | Output $/1M tok | Approx. cost per call |
+|---|---|---|---|---|
+| `STANDARD` | `claude-haiku-5-5` | $0.10 | $0.50 | ~$0.0002 |
+| `PREMIUM` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 (~20x `STANDARD`) |
+
+The lower escalation threshold for `PREMIUM` plus the stronger (and ~20x pricier) model is a real cost/depth trade-off per plan, not just a label.
 
 ## What's intentionally left out (and why)
 
