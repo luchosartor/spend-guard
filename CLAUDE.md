@@ -12,8 +12,9 @@ Real-time fraud/anomaly detection for corporate card spend. Every transaction is
 ## Important Rules
 
 - **Keep this file up to date**: when an entity/table or a major module is added, reflect it here.
-- Gradle itself must run on an installed JDK (21, Microsoft build, already on PATH). Only the **toolchain** used to compile/run the app is Java 25 (`gradle.properties` registers `/opt/homebrew/opt/openjdk@25` as an additional installation). Do not set `org.gradle.java.home` to the JDK 25 path — Gradle 8.14 cannot run its own daemon on Java 25 yet.
+- Gradle itself needs any JDK on `PATH` to launch (17+); it does not need to be Java 25. The `org.gradle.toolchains.foojay-resolver-convention` plugin (`settings.gradle`) auto-downloads the Java 25 toolchain used to actually compile/run the app on first build — no manual JDK install or hardcoded path needed, on this machine or anyone else's (including CI).
 - Detection must stay on the **ingest path**: both the synthetic data generator and any future real feed call the same `TransactionIngestService`. Nothing is pre-labeled before scoring.
+- CI (`.github/workflows/ci.yml`) runs compile + unit tests on every push/PR. No DB or live AI key in CI — only tests that don't need either.
 
 ## Build & Run
 
@@ -29,13 +30,21 @@ docker compose up -d          # Postgres on localhost:5433
 src/main/java/com/spendguard/
   domain/       # JPA entities
   repository/   # Spring Data JPA repositories
-  detection/    # rule engine (signals, scoring)
+  detection/    # rule engine (signals, scoring orchestration)
   ai/           # FraudAiReviewer: Api + Cli implementations
   seed/         # synthetic data generator
-  web/          # REST controllers + DTOs
-  config/       # AiProperties, etc.
+  web/          # REST controllers + DTOs + TransactionIngestService
+  config/       # AiProperties, AiConfig
+  exception/    # NotFoundException, ConflictException (shared across layers)
 ```
 
 ## Database Schema
 
-_(filled in as entities land)_
+- `companies` - id, name, plan (`STANDARD` | `PREMIUM`)
+- `employees` - id, company_id, full_name, department, role
+- `merchants` - id, name, category (`TRAVEL`|`SOFTWARE`|`MEALS`|`OFFICE`|`TRANSPORT`|`ENTERTAINMENT`), country, policy_limit (nullable)
+- `cards` - id, employee_id, last4
+- `transactions` - id, card_id, merchant_id, amount, currency, occurred_at, country, planted_anomaly, planted_type (internal only, never serialized outside the seed endpoint's own response)
+- `transaction_flags` - id, transaction_id (unique), rule_score, ai_risk_score (nullable), semantic_mismatch (nullable), ai_explanation (nullable), final_score, status (`PENDING`|`APPROVED`|`REJECTED`), resolved_at, resolved_note
+
+Rule signal breakdown (amount z-score, velocity/duplicate/geo/policy) is not persisted - `GET /api/flags/{id}` recomputes it on demand via `TransactionScoringService.computeSignals`, since it's a deterministic function of the transaction + its (immutable, backward-looking) history.

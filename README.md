@@ -6,10 +6,14 @@ _(Problem statement, approach and demo instructions go here — filled in once t
 
 ## Running locally
 
+Requirements: Docker, and any JDK 17+ on `PATH` to launch Gradle — the Java 25 toolchain used to actually compile/run the app downloads automatically on first build (no manual JDK install needed).
+
 ```bash
 docker compose up -d   # Postgres on localhost:5433
 ./gradlew bootRun      # API on :8080
 ```
+
+CI (`.github/workflows/ci.yml`) compiles and runs the unit test suite on every push/PR.
 
 ## Development workflow: `coder` / `leader` agents
 
