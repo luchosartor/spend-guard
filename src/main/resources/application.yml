@@ -22,7 +22,7 @@ spendguard:
   ai:
     provider: api # api | cli
     api-key: ${ANTHROPIC_API_KEY:}
-    standard-model: claude-haiku-5-5
-    premium-model: claude-sonnet-5-5
+    standard-model: claude-sonnet-5-5
+    premium-model: claude-opus-5-5
     standard-escalation-threshold: 20
     premium-escalation-threshold: 10
