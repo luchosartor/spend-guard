@@ -7,9 +7,28 @@ services:
       POSTGRES_PASSWORD: spendguard
       POSTGRES_DB: spendguard
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - spend-guard-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spendguard -d spendguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  spend-guard-app:
+    build: .
+    container_name: spend-guard-app
+    depends_on:
+      spend-guard-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://spend-guard-db:5432/spendguard
+      SPRING_DATASOURCE_USERNAME: spendguard
+      SPRING_DATASOURCE_PASSWORD: spendguard
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "${APP_PORT:-8080}:8080"
 
 volumes:
   spend-guard-db-data:
