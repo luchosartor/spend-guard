@@ -216,7 +216,9 @@ public class SeedDataService {
     private void generateHistory(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
                                    Map<MerchantCategory, Merchant> normalMerchants,
                                    Instant historyStart, Instant historyEnd, Random random) {
-        MerchantCategory[] categories = MerchantCategory.values();
+        // Only categories that actually have a merchant + baseline set up (not every MerchantCategory
+        // value - OTHER, for instance, is a real-world MCC catch-all with no demo merchant behind it).
+        MerchantCategory[] categories = normalMerchants.keySet().toArray(new MerchantCategory[0]);
         for (int week = 0; week < HISTORY_WEEKS; week++) {
             Instant weekStart = historyStart.plus(Duration.ofDays(7L * week));
             int txCount = 3 + random.nextInt(3); // 3-5 per week
