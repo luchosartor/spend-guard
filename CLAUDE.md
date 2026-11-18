@@ -4,7 +4,7 @@ Real-time fraud/anomaly detection for corporate card spend. Every transaction is
 
 ## Tech Stack
 
-- Java 25, Spring Boot 4.1.1, Gradle 8.14
+- Java 21, Spring Boot 4.1.1, Gradle 8.14
 - PostgreSQL with Spring Data JPA (`ddl-auto=update`, no migration tool — see README trade-offs)
 - Lombok
 - Local only, no deployment
@@ -12,7 +12,7 @@ Real-time fraud/anomaly detection for corporate card spend. Every transaction is
 ## Important Rules
 
 - **Keep this file up to date**: when an entity/table or a major module is added, reflect it here.
-- Gradle itself needs any JDK on `PATH` to launch (17+); it does not need to be Java 25. The `org.gradle.toolchains.foojay-resolver-convention` plugin (`settings.gradle`) auto-downloads the Java 25 toolchain used to actually compile/run the app on first build — no manual JDK install or hardcoded path needed, on this machine or anyone else's (including CI).
+- Everything targets Java 21 — one JDK everywhere, no toolchain split. The `org.gradle.toolchains.foojay-resolver-convention` plugin (`settings.gradle`) auto-downloads it on first build if the host's default JDK isn't 21 — no manual install or hardcoded path needed, on this machine or anyone else's (including CI).
 - Detection must stay on the **ingest path**: both the synthetic data generator and any future real feed call the same `TransactionIngestService`. Nothing is pre-labeled before scoring.
 - CI (`.github/workflows/ci.yml`) runs compile + unit tests on every push/PR. No DB or live AI key in CI — only tests that don't need either.
 
