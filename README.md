@@ -69,10 +69,10 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 
 | Plan | Model | Input $/1M tok | Output $/1M tok | Approx. cost per call |
 |---|---|---|---|---|
-| `STANDARD` | `claude-haiku-5-5` | $0.10 | $0.50 | ~$0.0002 |
-| `PREMIUM` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 (~20x `STANDARD`) |
+| `STANDARD` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 |
+| `PREMIUM` | `claude-opus-5-5` | $4.00 | $20.00 | ~$0.008 (~2x `STANDARD`) |
 
-The lower escalation threshold for `PREMIUM` plus the stronger (and ~20x pricier) model is a real cost/depth trade-off per plan, not just a label.
+The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier) model is a real cost/depth trade-off per plan, not just a label.
 
 ## What's intentionally left out (and why)
 
