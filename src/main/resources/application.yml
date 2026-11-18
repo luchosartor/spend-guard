@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: spend-guard
+  datasource:
+    url: jdbc:postgresql://localhost:5433/spendguard
+    username: spendguard
+    password: spendguard
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+
+spendguard:
+  ai:
+    provider: api # api | cli
+    api-key: ${ANTHROPIC_API_KEY:}

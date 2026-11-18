@@ -1,0 +1,15 @@
+services:
+  spend-guard-db:
+    image: postgres:17
+    container_name: spend-guard-db
+    environment:
+      POSTGRES_USER: spendguard
+      POSTGRES_PASSWORD: spendguard
+      POSTGRES_DB: spendguard
+    ports:
+      - "5433:5432"
+    volumes:
+      - spend-guard-db-data:/var/lib/postgresql/data
+
+volumes:
+  spend-guard-db-data:
