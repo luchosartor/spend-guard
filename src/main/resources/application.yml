@@ -2,9 +2,9 @@ spring:
   application:
     name: spend-guard
   datasource:
-    url: jdbc:postgresql://localhost:5433/spendguard
-    username: spendguard
-    password: spendguard
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/spendguard}
+    username: ${SPRING_DATASOURCE_USERNAME:spendguard}
+    password: ${SPRING_DATASOURCE_PASSWORD:spendguard}
   jpa:
     hibernate:
       ddl-auto: update
