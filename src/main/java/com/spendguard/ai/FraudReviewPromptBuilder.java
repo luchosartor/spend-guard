@@ -8,6 +8,10 @@ import com.spendguard.domain.Transaction;
  * Builds the single prompt sent to Claude by both {@link ApiFraudAiReviewer} and
  * {@link CliFraudAiReviewer} - the two implementations must ask exactly the same question so the
  * only difference between them is transport.
+ *
+ * <p>Sends the employee's ID, not their name: department/role already carry all the fraud signal
+ * a name would add, so sending a real name to a third-party model would be unnecessary PII
+ * exposure. The analyst's own UI resolves the ID to a name locally.
  */
 public final class FraudReviewPromptBuilder {
 
@@ -36,7 +40,7 @@ public final class FraudReviewPromptBuilder {
                 - Merchant: %s (category: %s, merchant's home country: %s, policy limit: %s)
 
                 Employee:
-                - Name: %s
+                - Employee ID: %d
                 - Department: %s
                 - Role: %s
                 - Recent spending pattern: %s
@@ -57,7 +61,7 @@ public final class FraudReviewPromptBuilder {
                 transaction.getCountry(),
                 merchant.getName(), merchant.getCategory(), merchant.getCountry(),
                 merchant.getPolicyLimit() == null ? "none" : merchant.getPolicyLimit(),
-                employee.getFullName(), employee.getDepartment(), employee.getRole(),
+                employee.getId(), employee.getDepartment(), employee.getRole(),
                 context.spendingSummary(),
                 signals.amountZScore() == null ? "n/a (insufficient history)" : "%.2f".formatted(signals.amountZScore()),
                 signals.velocityTriggered(),
