@@ -72,12 +72,12 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 
 | Plan | Model | Input $/1M tok | Output $/1M tok | Approx. cost per call |
 |---|---|---|---|---|
-| `STANDARD` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 |
-| `PREMIUM` | `claude-opus-5-5` | $4.00 | $20.00 | ~$0.008 (~2x `STANDARD`) |
+| `STANDARD` | `claude-haiku-5-5` | $0.10 | $0.50 | ~$0.0002 |
+| `PREMIUM` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 (~20x `STANDARD`) |
 
-The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier) model is a real cost/depth trade-off per plan, not just a label.
+The lower escalation threshold for `PREMIUM` plus the stronger (and ~20x pricier) model is a real cost/depth trade-off per plan, not just a label.
 
-**Why `effort=low` and a 1024-token ceiling, not the 300 this started with.** Sonnet 5.5 and Opus 5.5 always run a reasoning step before answering and can't have it disabled — at `MAX_TOKENS=300` with no `effort` set, that reasoning step regularly ate the whole budget mid-thought, truncating the JSON response before its closing quote. Measured on two real runs: 28 of ~100 calls failed to parse for exactly this reason, each one billed for nothing (falls back to rule-only for that transaction). `effort=low` is the right fit for a bounded classification task like this one (not open-ended reasoning) and keeps the reasoning step short in the first place, with the higher ceiling as a backstop so a longer explanation still fits.
+**Why `effort=low` and a 1024-token ceiling, not the 300 this started with.** Claude models in the 5.5 line always run a reasoning step before answering and can't have it disabled — at `MAX_TOKENS=300` with no `effort` set (tested against the `claude-sonnet-5-5`/`claude-opus-5-5` pair, before reverting to `claude-haiku-5-5`/`claude-sonnet-5-5` below), that reasoning step regularly ate the whole budget mid-thought, truncating the JSON response before its closing quote. Measured on two real runs: 28 of ~100 calls failed to parse for exactly this reason, each one billed for nothing (falls back to rule-only for that transaction). `effort=low` is the right fit for a bounded classification task like this one (not open-ended reasoning) and keeps the reasoning step short in the first place, with the higher ceiling as a backstop so a longer explanation still fits. The per-call estimates above are provisional for the `haiku`/`sonnet` pair - not yet re-measured against a real run.
 
 ## What's intentionally left out (and why)
 

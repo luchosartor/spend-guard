@@ -14,9 +14,9 @@ public class AiProperties {
 
     // Non-null defaults: a null model string reaching the Anthropic/CLI request would NPE
     // (e.g. Map.of(...) rejects a null value) rather than failing in an obvious, loggable way.
-    private String standardModel = "claude-sonnet-5-5";
+    private String standardModel = "claude-haiku-5-5";
 
-    private String premiumModel = "claude-opus-5-5";
+    private String premiumModel = "claude-sonnet-5-5";
 
     private int standardEscalationThreshold;
 
