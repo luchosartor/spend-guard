@@ -552,7 +552,9 @@
       })
       .catch(function () {
         setBusy(false);
-        showRunError("Could not reach the API. Is the app running?");
+        showRunError("Lost the connection to the API. If this was a long mode=api/cli run, the "
+          + "backend doesn't stop just because the browser's connection dropped - check the Flag "
+          + "queue tab before re-running, it may have finished anyway.");
       });
   }
 

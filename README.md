@@ -18,6 +18,8 @@ If `5433` or `8080` are already taken on your machine, override them in the same
 
 Because of this, the frontend's CLI mode button (and `GET /api/admin/seed-info`'s `cli.available`) will show as unavailable as long as you're running via `docker compose up` — that's expected, not a bug. To actually exercise `mode=cli`, run the app directly on the host instead (`./gradlew bootRun`, see below) on a machine with Claude Code installed and authenticated.
 
+**If the browser shows a connection error partway through a long `mode=api`/`mode=cli` run:** the backend has no idea the browser gave up and keeps running regardless - Docker Desktop's port forwarding has been seen to drop a long-held, low-traffic connection before the ~2-9 minute seed call returns. Check the Flag queue tab (or `GET /api/flags`) before re-running; the data is very likely already there, and re-running means paying for another full run on top of the one that actually finished.
+
 **If you're re-running this after pulling a schema change and already had the stack up before:** reset the Postgres volume once (`docker compose down -v`) before `docker compose up --build` again. `ddl-auto=update` can't safely add a new non-nullable column to a table that already has rows.
 
 For active development without rebuilding the image on every change:
