@@ -25,20 +25,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private static final String COST_FREE = "$0 - rule-only scoring, no AI call made.";
-    // Haiku 5.5/Sonnet 5.5 pricing, with output_config.effort=low keeping the mandatory reasoning
-    // step short - not yet re-measured against a real run on this tier pair, so treat this as a
-    // provisional estimate, not the observed range the prior Sonnet/Opus pairing got.
-    private static final String COST_API = "~$0.15-0.40 for a full run (~100 Claude API calls at "
+    // SeedDataService now plants 3 types on 1 employee per company (30 ingest calls total) instead
+    // of 6 types across 8 employees - at most ~10 of those ever escalate to the AI (2 first-time-
+    // merchant calls from history + 3 plants, x2 companies), not ~100. Provisional: not yet
+    // re-measured against a real run on this trimmed-down generator.
+    private static final String COST_API = "~$0.02-0.05 for a full run (up to ~10 Claude API calls at "
             + "claude-haiku-5-5/claude-sonnet-5-5 pricing, each including its own reasoning step) - "
-            + "provisional, not yet measured on this model pair.";
+            + "provisional, not yet measured.";
     private static final String COST_CLI = "No direct Anthropic API charge - uses the local Claude Code CLI, "
             + "subject to that plan's usage limits.";
 
-    private static final String DURATION_FREE = "~10-20 seconds.";
-    private static final String DURATION_API = "~2-6 minutes (around 100 sequential calls to Claude, each "
-            + "including its own reasoning step) - provisional, not yet measured on this model pair.";
-    private static final String DURATION_CLI = "~5-15 minutes (each call shells out to the CLI, slower than a "
-            + "direct API call).";
+    private static final String DURATION_FREE = "~5-10 seconds.";
+    private static final String DURATION_API = "~30-90 seconds (up to ~10 sequential calls to Claude, each "
+            + "including its own reasoning step) - provisional, not yet measured.";
+    private static final String DURATION_CLI = "~1-3 minutes (up to ~10 calls, each shelling out to the CLI - "
+            + "slower per call than a direct API call).";
 
     private final SeedDataService seedDataService;
     private final AiProperties aiProperties;

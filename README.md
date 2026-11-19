@@ -31,7 +31,7 @@ docker compose up -d spend-guard-db   # just Postgres, on localhost:5433
 
 CI (`.github/workflows/ci.yml`) compiles and runs the unit test suite on every push/PR.
 
-Try it: `POST /api/admin/seed?mode=none|cli|api` to populate synthetic data (2 companies, one of each planted anomaly type), then `GET /api/flags` for the priority queue. `mode` picks which AI reviewer this one run uses — independent of `spendguard.ai.provider`, so switching between a free rule-only run, the CLI, and the real API never requires restarting the app. `mode=api` with a key configured needs `&confirm=true` (see the cost gate below); `GET /api/admin/seed-info` reports cost/time estimates and availability for all three modes up front.
+Try it: `POST /api/admin/seed?mode=none|cli|api` to populate synthetic data (2 companies, 3 planted anomaly types each), then `GET /api/flags` for the priority queue. `mode` picks which AI reviewer this one run uses — independent of `spendguard.ai.provider`, so switching between a free rule-only run, the CLI, and the real API never requires restarting the app. `mode=api` with a key configured needs `&confirm=true` (see the cost gate below); `GET /api/admin/seed-info` reports cost/time estimates and availability for all three modes up front.
 
 ## Development workflow: `coder` / `leader` agents
 
@@ -49,7 +49,7 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - Two swappable AI providers (`api` = Anthropic Messages API, `cli` = shells out to Claude Code) via one config line.
 - Per-company pricing tier (`STANDARD`/`PREMIUM`) controls both the escalation threshold and which model gets called — real, working "deeper analysis for bigger clients."
 - A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`). `APPROVED` means the analyst cleared the transaction as legitimate (false positive); `REJECTED` means they confirmed it as fraud.
-- A synthetic data generator with one planted anomaly of each type and measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use.
+- A synthetic data generator (1 employee per company, 30 ingest calls total) planting 3 anomaly types (`AMOUNT_OUTLIER`, `POLICY`, `SEMANTIC_MISMATCH`) with measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use - kept small on purpose so a full `mode=api` run costs cents and takes under two minutes, not several dollars and several minutes. `VELOCITY`, `DUPLICATE` and `GEO` are still fully supported by the rule engine itself (see `RuleEngineTest`); they're just not planted by this generator right now.
 - A minimal frontend (served at `/`, no build step): a seed screen with a per-run AI mode picker (API/CLI/none, each showing its own cost/time estimate and greyed out when unavailable) and a flag queue tab to review and clear/confirm-fraud pending flags.
 - Fully containerized (Postgres + API), Java 21 throughout, zero manual JDK install anywhere.
 
