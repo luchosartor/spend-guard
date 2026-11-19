@@ -239,8 +239,8 @@
     color: var(--fg-muted);
     margin-top: 2px;
   }
-  .table-scroll { overflow-x: auto; margin-top: 14px; }
-  table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 13px; }
+  .table-scroll { margin-top: 14px; }
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
   th {
     text-align: left;
     font-size: 11px;
@@ -251,22 +251,53 @@
     padding: 0 8px 8px 0;
     border-bottom: 1px solid var(--border);
   }
-  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
-  td.who { white-space: normal; }
-  tr.why-row td { white-space: normal; }
+  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  /* Flag rows are flex, not <table> - predictable sizing with mixed-height content (multi-line
+     score + why-toggle, wrapping employee/merchant text, stacked action buttons), and one border
+     per row regardless of how tall its tallest column gets. */
+  .flags-head, .flag-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+  }
+  .flags-head {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .flag-item { border-bottom: 1px solid var(--border); }
+  .flag-item:last-child { border-bottom: none; }
+  .col-score { flex: 0 0 60px; }
+  .col-who { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+  .col-amount { flex: 0 0 72px; font-family: "IBM Plex Mono", monospace; font-size: 13px; white-space: nowrap; }
+  .col-when { flex: 0 0 108px; font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+  .col-actions { flex: 0 0 76px; display: flex; flex-direction: column; gap: 4px; }
+  .col-actions button { width: 100%; }
+  @media (max-width: 480px) {
+    .flags-head { display: none; }
+    .flag-row { flex-wrap: wrap; row-gap: 6px; }
+    .col-score { flex: 0 0 auto; }
+    .col-who { flex: 1 1 160px; }
+    .col-amount, .col-when { flex: 0 0 auto; }
+    .col-actions { flex: 1 1 100%; flex-direction: row; }
+  }
   td:first-child, th:first-child { padding-left: 0; }
   td.mono { font-family: "IBM Plex Mono", monospace; }
-  td.score-cell .final { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 14px; }
-  td.score-cell .breakdown { color: var(--fg-muted); font-size: 11px; margin-top: 2px; }
+  .col-score .final { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 14px; }
+  .col-score .breakdown { color: var(--fg-muted); font-size: 11px; margin-top: 2px; }
   .why-link {
     background: none; border: none; padding: 0; margin-top: 4px;
     font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer; display: block;
   }
-  tr.why-row td { background: var(--bg); padding: 12px; }
+  .why-panel { font-size: 13px; background: var(--bg); border-radius: 8px; padding: 12px; margin: -4px 0 14px; }
   .why-explanation { font-style: italic; margin-bottom: 8px; }
   .why-signals, .why-note { color: var(--fg-muted); font-size: 12px; }
   .why-note { margin-top: 6px; }
-  td.who .merchant-sub { color: var(--fg-muted); font-size: 12px; margin-top: 2px; }
+  .col-who .merchant-sub { color: var(--fg-muted); font-size: 12px; margin-top: 2px; }
   .chip {
     display: inline-flex;
     align-items: center;
@@ -358,13 +389,15 @@
 
       <div class="status-line" id="flags-loading"><span class="spinner"></span><span>Loading…</span></div>
       <p class="note" id="flags-empty" hidden>No flags with this status. Run the seed first if the queue is empty.</p>
-      <div class="table-scroll">
-        <table id="flags-table" hidden>
-          <thead>
-            <tr><th>Score</th><th>Transaction</th><th>Amount</th><th>Occurred</th><th></th></tr>
-          </thead>
-          <tbody id="flags-rows"></tbody>
-        </table>
+      <div id="flags-list" hidden>
+        <div class="flags-head">
+          <div class="col-score">Score</div>
+          <div class="col-who">Transaction</div>
+          <div class="col-amount">Amount</div>
+          <div class="col-when">Occurred</div>
+          <div class="col-actions"></div>
+        </div>
+        <div id="flags-rows"></div>
       </div>
       <div id="flags-error"></div>
     </section>
@@ -385,7 +418,7 @@
   function formatWhen(iso) {
     try {
       return new Date(iso).toLocaleString(undefined, {
-        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
       });
     } catch (e) {
       return iso;
@@ -515,7 +548,7 @@
   var flagsStatus = document.getElementById("flags-status");
   var flagsLoading = document.getElementById("flags-loading");
   var flagsEmpty = document.getElementById("flags-empty");
-  var flagsTable = document.getElementById("flags-table");
+  var flagsList = document.getElementById("flags-list");
   var flagsRows = document.getElementById("flags-rows");
   var flagsError = document.getElementById("flags-error");
 
@@ -527,8 +560,8 @@
     flagsError.innerHTML = "";
   }
 
-  function loadWhy(id, targetTd) {
-    targetTd.innerHTML = '<div class="status-line"><span class="spinner"></span><span>Loading…</span></div>';
+  function loadWhy(id, targetEl) {
+    targetEl.innerHTML = '<div class="status-line"><span class="spinner"></span><span>Loading…</span></div>';
     fetch("/api/flags/" + id)
       .then(function (r) {
         if (!r.ok) throw new Error("not found");
@@ -553,29 +586,31 @@
         if (!detail.ai_explanation && detail.ai_risk_score == null) {
           parts.push('<div class="why-note">The AI reviewer never ran for this transaction (below the escalation threshold and not a first-time merchant) - flagged on rule signals alone.</div>');
         }
-        targetTd.innerHTML = parts.join("");
+        targetEl.innerHTML = parts.join("");
       })
       .catch(function () {
-        targetTd.innerHTML = '<div class="error">Could not load the explanation.</div>';
+        targetEl.innerHTML = '<div class="error">Could not load the explanation.</div>';
       });
   }
 
   function renderFlagRow(flag) {
-    var tr = document.createElement("tr");
-    var detailTr = document.createElement("tr");
-    detailTr.className = "why-row";
-    detailTr.hidden = true;
-    var detailTd = document.createElement("td");
-    detailTd.colSpan = 5;
-    detailTr.appendChild(detailTd);
+    var item = document.createElement("div");
+    item.className = "flag-item";
+
+    var row = document.createElement("div");
+    row.className = "flag-row";
+
+    var whyPanel = document.createElement("div");
+    whyPanel.className = "why-panel";
+    whyPanel.hidden = true;
     var detailLoaded = false;
 
     var aiPart = flag.ai_risk_score == null ? "no AI" : "ai " + flag.ai_risk_score;
     var mismatch = flag.semantic_mismatch ? " · semantic mismatch" : "";
 
-    var scoreCell = document.createElement("td");
-    scoreCell.className = "score-cell";
-    scoreCell.innerHTML = '<div class="final">' + flag.final_score + '</div><div class="breakdown">rule '
+    var scoreCol = document.createElement("div");
+    scoreCol.className = "col-score";
+    scoreCol.innerHTML = '<div class="final">' + flag.final_score + '</div><div class="breakdown">rule '
       + flag.rule_score + " · " + aiPart + mismatch + "</div>";
 
     var whyBtn = document.createElement("button");
@@ -583,65 +618,66 @@
     whyBtn.className = "why-link";
     whyBtn.textContent = "Why ▾";
     whyBtn.addEventListener("click", function () {
-      var opening = detailTr.hidden;
-      detailTr.hidden = !opening;
+      var opening = whyPanel.hidden;
+      whyPanel.hidden = !opening;
       whyBtn.textContent = opening ? "Why ▴" : "Why ▾";
       if (opening && !detailLoaded) {
         detailLoaded = true;
-        loadWhy(flag.id, detailTd);
+        loadWhy(flag.id, whyPanel);
       }
     });
-    scoreCell.appendChild(whyBtn);
+    scoreCol.appendChild(whyBtn);
 
-    var whoCell = document.createElement("td");
-    whoCell.className = "who";
-    whoCell.innerHTML = escapeHtml(flag.employee_name) + '<div class="merchant-sub">'
+    var whoCol = document.createElement("div");
+    whoCol.className = "col-who";
+    whoCol.innerHTML = escapeHtml(flag.employee_name) + '<div class="merchant-sub">'
       + escapeHtml(flag.merchant_name) + " · " + escapeHtml(flag.category) + "</div>";
 
-    var amountCell = document.createElement("td");
-    amountCell.className = "mono";
-    amountCell.textContent = flag.amount + " " + flag.currency;
+    var amountCol = document.createElement("div");
+    amountCol.className = "col-amount";
+    amountCol.textContent = flag.amount + " " + flag.currency;
 
-    var whenCell = document.createElement("td");
-    whenCell.textContent = formatWhen(flag.occurred_at);
+    var whenCol = document.createElement("div");
+    whenCol.className = "col-when";
+    whenCol.textContent = formatWhen(flag.occurred_at);
 
-    var actionsCell = document.createElement("td");
+    var actionsCol = document.createElement("div");
+    actionsCol.className = "col-actions";
     if (flag.status === "PENDING") {
       var approveBtn = document.createElement("button");
       approveBtn.className = "sm approve";
       approveBtn.type = "button";
-      approveBtn.textContent = "Clear (legitimate)";
-      approveBtn.addEventListener("click", function () { resolveFlag(flag.id, "APPROVED", tr, detailTr, approveBtn, rejectBtn); });
+      approveBtn.title = "Clear - this transaction is legitimate";
+      approveBtn.textContent = "Clear";
+      approveBtn.addEventListener("click", function () { resolveFlag(flag.id, "APPROVED", item, approveBtn, rejectBtn); });
 
       var rejectBtn = document.createElement("button");
       rejectBtn.className = "sm reject";
       rejectBtn.type = "button";
-      rejectBtn.textContent = "Confirm fraud";
-      rejectBtn.addEventListener("click", function () { resolveFlag(flag.id, "REJECTED", tr, detailTr, approveBtn, rejectBtn); });
+      rejectBtn.title = "Confirm this transaction as fraud";
+      rejectBtn.textContent = "Fraud";
+      rejectBtn.addEventListener("click", function () { resolveFlag(flag.id, "REJECTED", item, approveBtn, rejectBtn); });
 
-      actionsCell.style.display = "flex";
-      actionsCell.style.gap = "6px";
-      actionsCell.appendChild(approveBtn);
-      actionsCell.appendChild(rejectBtn);
+      actionsCol.appendChild(approveBtn);
+      actionsCol.appendChild(rejectBtn);
     } else {
-      actionsCell.style.color = "var(--fg-muted)";
-      actionsCell.style.fontSize = "12px";
-      actionsCell.textContent = flag.status === "APPROVED" ? "Cleared (legitimate)" : "Confirmed fraud";
+      actionsCol.style.color = "var(--fg-muted)";
+      actionsCol.style.fontSize = "12px";
+      actionsCol.textContent = flag.status === "APPROVED" ? "Cleared" : "Confirmed fraud";
     }
 
-    tr.appendChild(scoreCell);
-    tr.appendChild(whoCell);
-    tr.appendChild(amountCell);
-    tr.appendChild(whenCell);
-    tr.appendChild(actionsCell);
+    row.appendChild(scoreCol);
+    row.appendChild(whoCol);
+    row.appendChild(amountCol);
+    row.appendChild(whenCol);
+    row.appendChild(actionsCol);
 
-    var fragment = document.createDocumentFragment();
-    fragment.appendChild(tr);
-    fragment.appendChild(detailTr);
-    return fragment;
+    item.appendChild(row);
+    item.appendChild(whyPanel);
+    return item;
   }
 
-  function resolveFlag(id, decision, rowEl, detailRowEl, approveBtn, rejectBtn) {
+  function resolveFlag(id, decision, itemEl, approveBtn, rejectBtn) {
     clearFlagsError();
     approveBtn.disabled = true;
     rejectBtn.disabled = true;
@@ -652,10 +688,9 @@
     })
       .then(function (r) {
         if (r.ok) {
-          rowEl.remove();
-          detailRowEl.remove();
+          itemEl.remove();
           if (!flagsRows.children.length) {
-            flagsTable.hidden = true;
+            flagsList.hidden = true;
             flagsEmpty.hidden = false;
           }
           return null;
@@ -673,7 +708,7 @@
 
   function loadFlags() {
     clearFlagsError();
-    flagsTable.hidden = true;
+    flagsList.hidden = true;
     flagsEmpty.hidden = true;
     flagsLoading.hidden = false;
 
@@ -687,7 +722,7 @@
           return;
         }
         flags.forEach(function (flag) { flagsRows.appendChild(renderFlagRow(flag)); });
-        flagsTable.hidden = false;
+        flagsList.hidden = false;
       })
       .catch(function () {
         flagsLoading.hidden = true;
