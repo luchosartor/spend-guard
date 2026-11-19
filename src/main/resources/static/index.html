@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Spend Guard — Seed</title>
+<title>Spend Guard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Layout: single scanning column — status, then action, then result; no hero, this is a tool, not a pitch. */
+  /* Layout: a tab switches between the seed screen and the flag queue; each is a single scanning column. */
   :root {
     --bg: #f4f5f7;
     --surface: #ffffff;
@@ -61,11 +61,36 @@
     font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
     font-size: 15px;
     line-height: 1.5;
-    padding: 32px 16px 64px;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 20px 16px 0;
+  }
+  .tab {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg-muted);
+    padding: 8px 14px;
+    border-radius: 7px 7px 0 0;
+    cursor: pointer;
+    border-bottom: none;
+    position: relative;
+    top: 1px;
+  }
+  .tab.active {
+    color: var(--fg);
+    border-bottom: 1px solid var(--surface);
   }
   main {
     max-width: 640px;
     margin: 0 auto;
+    padding: 20px 16px 64px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -88,13 +113,30 @@
     border-radius: 10px;
     padding: 18px 20px;
   }
-  .card h2 {
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .card h2, .card-head h2 {
     font-size: 13px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--fg-muted);
-    margin: 0 0 12px;
+    margin: 0;
+  }
+  select {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 5px 8px;
   }
   .row {
     display: flex;
@@ -146,6 +188,9 @@
     color: var(--fg-muted);
     border: 1px solid var(--border);
   }
+  button.sm { font-size: 12px; padding: 5px 10px; border-radius: 6px; }
+  button.approve { background: var(--ok); color: var(--ok-bg); }
+  button.reject { background: var(--warn); color: var(--warn-bg); }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .confirm-box {
     margin-top: 14px;
@@ -205,9 +250,12 @@
     padding: 0 8px 8px 0;
     border-bottom: 1px solid var(--border);
   }
-  td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
   td:first-child, th:first-child { padding-left: 0; }
-  td.type { font-family: "IBM Plex Mono", monospace; }
+  td.mono { font-family: "IBM Plex Mono", monospace; }
+  td.score-cell .final { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 14px; }
+  td.score-cell .breakdown { color: var(--fg-muted); font-size: 11px; margin-top: 2px; }
+  td.who .merchant-sub { color: var(--fg-muted); font-size: 12px; margin-top: 2px; }
   .chip {
     display: inline-flex;
     align-items: center;
@@ -230,52 +278,124 @@
 </style>
 </head>
 <body>
+
+<nav class="tabs">
+  <button class="tab active" id="tab-seed" type="button">Seed data</button>
+  <button class="tab" id="tab-flags" type="button">Flag queue</button>
+</nav>
+
 <main>
-  <header>
-    <h1>Spend Guard — Seed</h1>
-    <p>Wipes and regenerates two demo companies with synthetic spend history and one planted anomaly of each type.</p>
-  </header>
+  <div id="view-seed">
+    <header>
+      <h1>Seed demo data</h1>
+      <p>Wipes and regenerates two demo companies with synthetic spend history and one planted anomaly of each type.</p>
+    </header>
 
-  <section class="card" id="info-card">
-    <h2>Before you run it</h2>
-    <div class="row"><span class="label">AI provider</span><span class="value"><span class="pill" id="info-provider">—</span></span></div>
-    <div class="row"><span class="label">Estimated cost</span><span class="value" id="info-cost">—</span></div>
-    <div class="row"><span class="label">Estimated time</span><span class="value" id="info-duration">—</span></div>
-    <p class="note" id="info-note"></p>
-  </section>
+    <section class="card" id="info-card">
+      <h2>Before you run it</h2>
+      <div class="row"><span class="label">AI provider</span><span class="value"><span class="pill" id="info-provider">—</span></span></div>
+      <div class="row"><span class="label">Estimated cost</span><span class="value" id="info-cost">—</span></div>
+      <div class="row"><span class="label">Estimated time</span><span class="value" id="info-duration">—</span></div>
+      <p class="note" id="info-note"></p>
+    </section>
 
-  <section class="card">
-    <h2>Run</h2>
-    <div class="actions">
-      <button id="run-btn" type="button">Run seed</button>
-      <span class="status-line" id="run-status" hidden><span class="spinner"></span><span id="run-status-text"></span></span>
-    </div>
-    <div class="confirm-box" id="confirm-box" hidden>
-      <p id="confirm-text"></p>
+    <section class="card">
+      <h2>Run</h2>
       <div class="actions">
-        <button id="confirm-btn" type="button">Confirm and run</button>
-        <button class="secondary" id="cancel-btn" type="button">Cancel</button>
+        <button id="run-btn" type="button">Run seed</button>
+        <span class="status-line" id="run-status" hidden><span class="spinner"></span><span id="run-status-text"></span></span>
       </div>
-    </div>
-    <div id="run-error"></div>
-  </section>
+      <div class="confirm-box" id="confirm-box" hidden>
+        <p id="confirm-text"></p>
+        <div class="actions">
+          <button id="confirm-btn" type="button">Confirm and run</button>
+          <button class="secondary" id="cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+      <div id="run-error"></div>
+    </section>
 
-  <section class="card" id="result-card" hidden>
-    <h2>Result</h2>
-    <div class="stats" id="result-stats"></div>
-    <table id="result-table">
-      <thead>
-        <tr><th>Plan</th><th>Planted anomaly</th><th>Outcome</th></tr>
-      </thead>
-      <tbody id="result-rows"></tbody>
-    </table>
-  </section>
+    <section class="card" id="result-card" hidden>
+      <h2>Result</h2>
+      <div class="stats" id="result-stats"></div>
+      <table id="result-table">
+        <thead>
+          <tr><th>Plan</th><th>Planted anomaly</th><th>Outcome</th></tr>
+        </thead>
+        <tbody id="result-rows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div id="view-flags" hidden>
+    <header>
+      <h1>Flag queue</h1>
+      <p>Transactions scored above the flag threshold, waiting for (or already given) an analyst decision.</p>
+    </header>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Flags</h2>
+        <select id="flags-status">
+          <option value="PENDING">Pending</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
+      </div>
+
+      <div class="status-line" id="flags-loading"><span class="spinner"></span><span>Loading…</span></div>
+      <p class="note" id="flags-empty" hidden>No flags with this status. Run the seed first if the queue is empty.</p>
+      <table id="flags-table" hidden>
+        <thead>
+          <tr><th>Score</th><th>Transaction</th><th>Amount</th><th>Occurred</th><th></th></tr>
+        </thead>
+        <tbody id="flags-rows"></tbody>
+      </table>
+      <div id="flags-error"></div>
+    </section>
+  </div>
 </main>
 
 <script>
 (function () {
   "use strict";
 
+  // ---------- shared ----------
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s == null ? "" : String(s);
+    return div.innerHTML;
+  }
+
+  function formatWhen(iso) {
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  // ---------- tabs ----------
+  var tabSeed = document.getElementById("tab-seed");
+  var tabFlags = document.getElementById("tab-flags");
+  var viewSeed = document.getElementById("view-seed");
+  var viewFlags = document.getElementById("view-flags");
+
+  function showView(name) {
+    var seedActive = name === "seed";
+    viewSeed.hidden = !seedActive;
+    viewFlags.hidden = seedActive;
+    tabSeed.classList.toggle("active", seedActive);
+    tabFlags.classList.toggle("active", !seedActive);
+    if (!seedActive) loadFlags();
+  }
+
+  tabSeed.addEventListener("click", function () { showView("seed"); });
+  tabFlags.addEventListener("click", function () { showView("flags"); });
+
+  // ---------- seed screen ----------
   var infoProvider = document.getElementById("info-provider");
   var infoCost = document.getElementById("info-cost");
   var infoDuration = document.getElementById("info-duration");
@@ -301,18 +421,12 @@
     if (busy) runStatusText.textContent = label || ("Running — this can take " + currentDuration + "...");
   }
 
-  function showError(message) {
+  function showRunError(message) {
     runError.innerHTML = '<div class="error">' + escapeHtml(message) + "</div>";
   }
 
-  function clearError() {
+  function clearRunError() {
     runError.innerHTML = "";
-  }
-
-  function escapeHtml(s) {
-    var div = document.createElement("div");
-    div.textContent = s;
-    return div.innerHTML;
   }
 
   function loadInfo() {
@@ -348,14 +462,14 @@
       var chip = a.caught
         ? '<span class="chip ok">Caught</span>'
         : '<span class="chip warn">Not caught</span>';
-      return "<tr><td>" + a.company_plan + '</td><td class="type">' + a.planted_type + "</td><td>" + chip + "</td></tr>";
+      return "<tr><td>" + escapeHtml(a.company_plan) + '</td><td class="mono">' + escapeHtml(a.planted_type) + "</td><td>" + chip + "</td></tr>";
     }).join("");
 
     resultCard.hidden = false;
   }
 
   function runSeed(confirm) {
-    clearError();
+    clearRunError();
     setBusy(true);
     var url = "/api/admin/seed" + (confirm ? "?confirm=true" : "");
     fetch(url, { method: "POST" })
@@ -369,18 +483,143 @@
           confirmText.textContent = res.body.warning + " " + res.body.how_to_proceed;
           confirmBox.hidden = false;
         } else {
-          showError("Unexpected response (" + res.status + ").");
+          showRunError("Unexpected response (" + res.status + ").");
         }
       })
       .catch(function () {
         setBusy(false);
-        showError("Could not reach the API. Is the app running?");
+        showRunError("Could not reach the API. Is the app running?");
       });
   }
 
   runBtn.addEventListener("click", function () { runSeed(false); });
   confirmBtn.addEventListener("click", function () { runSeed(true); });
   cancelBtn.addEventListener("click", function () { confirmBox.hidden = true; });
+
+  // ---------- flag queue ----------
+  var flagsStatus = document.getElementById("flags-status");
+  var flagsLoading = document.getElementById("flags-loading");
+  var flagsEmpty = document.getElementById("flags-empty");
+  var flagsTable = document.getElementById("flags-table");
+  var flagsRows = document.getElementById("flags-rows");
+  var flagsError = document.getElementById("flags-error");
+
+  function showFlagsError(message) {
+    flagsError.innerHTML = '<div class="error">' + escapeHtml(message) + "</div>";
+  }
+
+  function clearFlagsError() {
+    flagsError.innerHTML = "";
+  }
+
+  function renderFlagRow(flag) {
+    var tr = document.createElement("tr");
+    var aiPart = flag.ai_risk_score == null ? "no AI" : "ai " + flag.ai_risk_score;
+    var mismatch = flag.semantic_mismatch ? " · semantic mismatch" : "";
+
+    var scoreCell = document.createElement("td");
+    scoreCell.className = "score-cell";
+    scoreCell.innerHTML = '<div class="final">' + flag.final_score + '</div><div class="breakdown">rule '
+      + flag.rule_score + " · " + aiPart + mismatch + "</div>";
+
+    var whoCell = document.createElement("td");
+    whoCell.className = "who";
+    whoCell.innerHTML = escapeHtml(flag.employee_name) + '<div class="merchant-sub">'
+      + escapeHtml(flag.merchant_name) + " · " + escapeHtml(flag.category) + "</div>";
+
+    var amountCell = document.createElement("td");
+    amountCell.className = "mono";
+    amountCell.textContent = flag.amount + " " + flag.currency;
+
+    var whenCell = document.createElement("td");
+    whenCell.textContent = formatWhen(flag.occurred_at);
+
+    var actionsCell = document.createElement("td");
+    if (flag.status === "PENDING") {
+      var approveBtn = document.createElement("button");
+      approveBtn.className = "sm approve";
+      approveBtn.type = "button";
+      approveBtn.textContent = "Approve";
+      approveBtn.addEventListener("click", function () { resolveFlag(flag.id, "APPROVED", tr, approveBtn, rejectBtn); });
+
+      var rejectBtn = document.createElement("button");
+      rejectBtn.className = "sm reject";
+      rejectBtn.type = "button";
+      rejectBtn.textContent = "Reject";
+      rejectBtn.addEventListener("click", function () { resolveFlag(flag.id, "REJECTED", tr, approveBtn, rejectBtn); });
+
+      actionsCell.style.display = "flex";
+      actionsCell.style.gap = "6px";
+      actionsCell.appendChild(approveBtn);
+      actionsCell.appendChild(rejectBtn);
+    } else {
+      actionsCell.className = "mono";
+      actionsCell.style.color = "var(--fg-muted)";
+      actionsCell.textContent = flag.status;
+    }
+
+    tr.appendChild(scoreCell);
+    tr.appendChild(whoCell);
+    tr.appendChild(amountCell);
+    tr.appendChild(whenCell);
+    tr.appendChild(actionsCell);
+    return tr;
+  }
+
+  function resolveFlag(id, decision, rowEl, approveBtn, rejectBtn) {
+    clearFlagsError();
+    approveBtn.disabled = true;
+    rejectBtn.disabled = true;
+    fetch("/api/flags/" + id + "/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: decision })
+    })
+      .then(function (r) {
+        if (r.ok) {
+          rowEl.remove();
+          if (!flagsRows.children.length) {
+            flagsTable.hidden = true;
+            flagsEmpty.hidden = false;
+          }
+          return null;
+        }
+        return r.json().then(function (body) {
+          throw new Error(body && body.error ? body.error : ("Could not resolve flag (" + r.status + ")."));
+        });
+      })
+      .catch(function (err) {
+        approveBtn.disabled = false;
+        rejectBtn.disabled = false;
+        showFlagsError(err.message || "Could not resolve the flag.");
+      });
+  }
+
+  function loadFlags() {
+    clearFlagsError();
+    flagsTable.hidden = true;
+    flagsEmpty.hidden = true;
+    flagsLoading.hidden = false;
+
+    fetch("/api/flags?status=" + encodeURIComponent(flagsStatus.value))
+      .then(function (r) { return r.json(); })
+      .then(function (flags) {
+        flagsLoading.hidden = true;
+        flagsRows.innerHTML = "";
+        if (!flags.length) {
+          flagsEmpty.hidden = false;
+          return;
+        }
+        flags.forEach(function (flag) { flagsRows.appendChild(renderFlagRow(flag)); });
+        flagsTable.hidden = false;
+      })
+      .catch(function () {
+        flagsLoading.hidden = true;
+        showFlagsError("Could not reach the API. Is the app running?");
+      });
+  }
+
+  flagsStatus.addEventListener("change", loadFlags);
 
   loadInfo();
 })();
