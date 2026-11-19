@@ -338,8 +338,8 @@
         <h2>Flags</h2>
         <select id="flags-status">
           <option value="PENDING">Pending</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
+          <option value="APPROVED">Cleared (legitimate)</option>
+          <option value="REJECTED">Confirmed fraud</option>
         </select>
       </div>
 
@@ -539,13 +539,13 @@
       var approveBtn = document.createElement("button");
       approveBtn.className = "sm approve";
       approveBtn.type = "button";
-      approveBtn.textContent = "Approve";
+      approveBtn.textContent = "Clear (legitimate)";
       approveBtn.addEventListener("click", function () { resolveFlag(flag.id, "APPROVED", tr, approveBtn, rejectBtn); });
 
       var rejectBtn = document.createElement("button");
       rejectBtn.className = "sm reject";
       rejectBtn.type = "button";
-      rejectBtn.textContent = "Reject";
+      rejectBtn.textContent = "Confirm fraud";
       rejectBtn.addEventListener("click", function () { resolveFlag(flag.id, "REJECTED", tr, approveBtn, rejectBtn); });
 
       actionsCell.style.display = "flex";
@@ -553,9 +553,9 @@
       actionsCell.appendChild(approveBtn);
       actionsCell.appendChild(rejectBtn);
     } else {
-      actionsCell.className = "mono";
       actionsCell.style.color = "var(--fg-muted)";
-      actionsCell.textContent = flag.status;
+      actionsCell.style.fontSize = "12px";
+      actionsCell.textContent = flag.status === "APPROVED" ? "Cleared (legitimate)" : "Confirmed fraud";
     }
 
     tr.appendChild(scoreCell);

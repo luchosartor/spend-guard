@@ -44,7 +44,7 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - `final_score = max(rule_score, ai_risk_score)`, never a blend — neither signal can cancel the other's alarm.
 - Two swappable AI providers (`api` = Anthropic Messages API, `cli` = shells out to Claude Code) via one config line.
 - Per-company pricing tier (`STANDARD`/`PREMIUM`) controls both the escalation threshold and which model gets called — real, working "deeper analysis for bigger clients."
-- A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`).
+- A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`). `APPROVED` means the analyst cleared the transaction as legitimate (false positive); `REJECTED` means they confirmed it as fraud.
 - A synthetic data generator with one planted anomaly of each type and measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use.
 - Fully containerized (Postgres + API), Java 21 throughout, zero manual JDK install anywhere.
 
