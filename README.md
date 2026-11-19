@@ -16,6 +16,8 @@ If `5433` or `8080` are already taken on your machine, override them in the same
 
 **Note:** the AI reviewer's `cli` provider (shells out to the Claude Code CLI) only works when running the app directly on a host that has Claude Code installed and authenticated — not inside the app container. It exists strictly so this project can be evaluated end-to-end without first provisioning an Anthropic API key; it is **not a production-viable option** (shelling out per transaction doesn't scale, and it ties the service to one authenticated host). The `api` provider (the default) is what a real deployment would use, and works either way. If you already have a Claude subscription: a $100/month Claude Max plan also includes $100/month in API credits, so evaluating with the `api` provider may not cost anything beyond that subscription.
 
+Because of this, the frontend's CLI mode button (and `GET /api/admin/seed-info`'s `cli.available`) will show as unavailable as long as you're running via `docker compose up` — that's expected, not a bug. To actually exercise `mode=cli`, run the app directly on the host instead (`./gradlew bootRun`, see below) on a machine with Claude Code installed and authenticated.
+
 **If you're re-running this after pulling a schema change and already had the stack up before:** reset the Postgres volume once (`docker compose down -v`) before `docker compose up --build` again. `ddl-auto=update` can't safely add a new non-nullable column to a table that already has rows.
 
 For active development without rebuilding the image on every change:
