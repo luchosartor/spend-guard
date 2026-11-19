@@ -40,4 +40,16 @@ class CliFraudAiReviewerTest {
         assertThat(processBuilder.command()).containsSequence("-p", "the prompt text");
         assertThat(processBuilder.command()).containsSequence("--model", "claude-haiku-5-5");
     }
+
+    @Test
+    void neverLetsTheCliSeeAnAnthropicApiKey() {
+        // ProcessBuilder inherits this JVM's environment by default - if ANTHROPIC_API_KEY is set
+        // (e.g. for the api provider, or leaked in from the launching shell), the claude CLI
+        // prefers it over the logged-in session, silently billing the API key instead of the
+        // subscription the cli provider exists to use instead.
+        ProcessBuilder processBuilder = reviewer.buildProcessBuilder("some prompt", "some-model");
+
+        assertThat(processBuilder.environment()).doesNotContainKey("ANTHROPIC_API_KEY");
+        assertThat(processBuilder.environment()).doesNotContainKey("ANTHROPIC_AUTH_TOKEN");
+    }
 }

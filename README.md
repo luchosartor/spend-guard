@@ -16,6 +16,10 @@ If `5433` or `8080` are already taken on your machine, override them in the same
 
 **Note:** the AI reviewer's `cli` provider (shells out to the Claude Code CLI) only works when running the app directly on a host that has Claude Code installed and authenticated — not inside the app container. It exists strictly so this project can be evaluated end-to-end without first provisioning an Anthropic API key; it is **not a production-viable option** (shelling out per transaction doesn't scale, and it ties the service to one authenticated host). The `api` provider (the default) is what a real deployment would use, and works either way. If you already have a Claude subscription: a $100/month Claude Max plan also includes $100/month in API credits, so evaluating with the `api` provider may not cost anything beyond that subscription.
 
+Because of this, the frontend's CLI mode button (and `GET /api/admin/seed-info`'s `cli.available`) will show as unavailable as long as you're running via `docker compose up` — that's expected, not a bug. To actually exercise `mode=cli`, run the app directly on the host instead (`./gradlew bootRun`, see below) on a machine with Claude Code installed and authenticated.
+
+**If the browser shows a connection error partway through a long `mode=api`/`mode=cli` run:** the backend has no idea the browser gave up and keeps running regardless - Docker Desktop's port forwarding has been seen to drop a long-held, low-traffic connection before the ~2-9 minute seed call returns. Check the Flag queue tab (or `GET /api/flags`) before re-running; the data is very likely already there, and re-running means paying for another full run on top of the one that actually finished.
+
 **If you're re-running this after pulling a schema change and already had the stack up before:** reset the Postgres volume once (`docker compose down -v`) before `docker compose up --build` again. `ddl-auto=update` can't safely add a new non-nullable column to a table that already has rows.
 
 For active development without rebuilding the image on every change:
@@ -27,7 +31,7 @@ docker compose up -d spend-guard-db   # just Postgres, on localhost:5433
 
 CI (`.github/workflows/ci.yml`) compiles and runs the unit test suite on every push/PR.
 
-Try it: `POST /api/admin/seed` to populate synthetic data (2 companies, one of each planted anomaly type), then `GET /api/flags` for the priority queue.
+Try it: `POST /api/admin/seed?mode=none|cli|api` to populate synthetic data (2 companies, 3 planted anomaly types each), then `GET /api/flags` for the priority queue. `mode` picks which AI reviewer this one run uses — independent of `spendguard.ai.provider`, so switching between a free rule-only run, the CLI, and the real API never requires restarting the app. `mode=api` with a key configured needs `&confirm=true` (see the cost gate below); `GET /api/admin/seed-info` reports cost/time estimates and availability for all three modes up front.
 
 ## Development workflow: `coder` / `leader` agents
 
@@ -44,8 +48,9 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - `final_score = max(rule_score, ai_risk_score)`, never a blend — neither signal can cancel the other's alarm.
 - Two swappable AI providers (`api` = Anthropic Messages API, `cli` = shells out to Claude Code) via one config line.
 - Per-company pricing tier (`STANDARD`/`PREMIUM`) controls both the escalation threshold and which model gets called — real, working "deeper analysis for bigger clients."
-- A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`).
-- A synthetic data generator with one planted anomaly of each type and measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use.
+- A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`). `APPROVED` means the analyst cleared the transaction as legitimate (false positive); `REJECTED` means they confirmed it as fraud.
+- A synthetic data generator (1 employee per company, 30 ingest calls total) planting 3 anomaly types (`AMOUNT_OUTLIER`, `POLICY`, `SEMANTIC_MISMATCH`) with measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use - kept small on purpose so a full `mode=api` run costs cents and takes under two minutes, not several dollars and several minutes. `VELOCITY`, `DUPLICATE` and `GEO` are still fully supported by the rule engine itself (see `RuleEngineTest`); they're just not planted by this generator right now.
+- A minimal frontend (served at `/`, no build step): a seed screen with a per-run AI mode picker (API/CLI/none, each showing its own cost/time estimate and greyed out when unavailable) and a flag queue tab to review and clear/confirm-fraud pending flags.
 - Fully containerized (Postgres + API), Java 21 throughout, zero manual JDK install anywhere.
 
 ## Detection rules
@@ -65,18 +70,20 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 
 **Combining the two:** `final_score = max(rule_score, ai_risk_score)` if the AI ran, else `final_score = rule_score`. A flag is created only if `final_score >= 50`.
 
-**AI cost per escalated transaction** (Anthropic list pricing; `MAX_TOKENS=300` caps the output, actual output is usually smaller since the response is a short JSON object):
+**AI cost per escalated transaction** (Anthropic list pricing; `MAX_TOKENS=1024` caps the output, actual usage is normally well under that since `output_config.effort=low` keeps the model's reasoning step short):
 
 | Plan | Model | Input $/1M tok | Output $/1M tok | Approx. cost per call |
 |---|---|---|---|---|
-| `STANDARD` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 |
-| `PREMIUM` | `claude-opus-5-5` | $4.00 | $20.00 | ~$0.008 (~2x `STANDARD`) |
+| `STANDARD` | `claude-haiku-5-5` | $0.10 | $0.50 | ~$0.0002 |
+| `PREMIUM` | `claude-sonnet-5-5` | $2.00 | $10.00 | ~$0.004 (~20x `STANDARD`) |
 
-The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier) model is a real cost/depth trade-off per plan, not just a label.
+The lower escalation threshold for `PREMIUM` plus the stronger (and ~20x pricier) model is a real cost/depth trade-off per plan, not just a label.
+
+**Why `effort=low` and a 1024-token ceiling, not the 300 this started with.** Claude models in the 5.5 line always run a reasoning step before answering and can't have it disabled — at `MAX_TOKENS=300` with no `effort` set (tested against the `claude-sonnet-5-5`/`claude-opus-5-5` pair, before reverting to `claude-haiku-5-5`/`claude-sonnet-5-5` below), that reasoning step regularly ate the whole budget mid-thought, truncating the JSON response before its closing quote. Measured on two real runs: 28 of ~100 calls failed to parse for exactly this reason, each one billed for nothing (falls back to rule-only for that transaction). `effort=low` is the right fit for a bounded classification task like this one (not open-ended reasoning) and keeps the reasoning step short in the first place, with the higher ceiling as a backstop so a longer explanation still fits. The per-call estimates above are provisional for the `haiku`/`sonnet` pair - not yet re-measured against a real run.
 
 ## What's intentionally left out (and why)
 
-- **Frontend.** Deliberately deferred — backend is what's being evaluated. The one screen it needs, when built: before running the seed, show the estimated cost and time (differs by `api`/`cli` provider) and what to expect caught/missed with AI configured vs. not; require an explicit confirm click before it can spend real credits (same intent as `/api/admin/seed`'s `?confirm=true` gate); then render the result once the run finishes.
+- **A richer frontend** (charts, multi-page navigation, auth-gated views). What's built is deliberately minimal — two tabs, no framework, no build step — because the backend is what's being evaluated.
 - **Auth, multi-tenant isolation beyond the company FK, pagination.** This is a single-analyst review tool for the exercise, not a multi-customer SaaS product — adding auth wouldn't have demonstrated anything about the detection problem itself.
 - **Feedback/retraining loop.** Capturing an analyst's approve/reject decision is already free (it's just a field on the flag). *Using* that history to recalibrate rule weights, or feeding the AI prompt few-shot examples of past verdicts, is a real follow-up project on its own — not built.
 - **Full boundary-value test matrix.** The core boundaries (z-score thresholds, the 5-history-item cutoff, identical-timestamp duplicates) are tested; every signal's window boundary (10 min / 30 min / 3 h, both sides) isn't.

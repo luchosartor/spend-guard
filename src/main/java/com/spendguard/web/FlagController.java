@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.spendguard.domain.Card;
+import com.spendguard.domain.Company;
 import com.spendguard.domain.Employee;
 import com.spendguard.domain.FlagStatus;
 import com.spendguard.domain.Merchant;
@@ -16,6 +17,7 @@ import com.spendguard.domain.TransactionFlag;
 import com.spendguard.exception.ConflictException;
 import com.spendguard.exception.NotFoundException;
 import com.spendguard.repository.CardRepository;
+import com.spendguard.repository.CompanyRepository;
 import com.spendguard.repository.EmployeeRepository;
 import com.spendguard.repository.MerchantRepository;
 import com.spendguard.repository.TransactionFlagRepository;
@@ -41,6 +43,7 @@ public class FlagController {
     private final CardRepository cardRepository;
     private final EmployeeRepository employeeRepository;
     private final MerchantRepository merchantRepository;
+    private final CompanyRepository companyRepository;
 
     @GetMapping
     public List<FlagSummaryResponse> list(@RequestParam(defaultValue = "PENDING") FlagStatus status) {
@@ -52,15 +55,17 @@ public class FlagController {
         Map<Long, Transaction> txById = loadTransactions(flags);
         Map<Long, Card> cardById = loadCards(txById.values());
         Map<Long, Employee> employeeById = loadEmployees(cardById.values());
+        Map<Long, Company> companyById = loadCompanies(employeeById.values());
         Map<Long, Merchant> merchantById = loadMerchants(txById.values());
 
         return flags.stream().map(flag -> {
             Transaction tx = txById.get(flag.getTransactionId());
             Card card = cardById.get(tx.getCardId());
             Employee employee = employeeById.get(card.getEmployeeId());
+            Company company = companyById.get(employee.getCompanyId());
             Merchant merchant = merchantById.get(tx.getMerchantId());
             return new FlagSummaryResponse(
-                    flag.getId(), tx.getId(), employee.getFullName(), merchant.getName(), merchant.getCategory(),
+                    flag.getId(), tx.getId(), employee.getFullName(), company.getName(), merchant.getName(), merchant.getCategory(),
                     tx.getAmount(), tx.getCurrency(), tx.getOccurredAt(), flag.getRuleScore(), flag.getAiRiskScore(),
                     flag.getSemanticMismatch(), flag.getFinalScore(), flag.getStatus());
         }).toList();
@@ -76,11 +81,13 @@ public class FlagController {
                 .orElseThrow(() -> new NotFoundException("Card not found: " + tx.getCardId()));
         Employee employee = employeeRepository.findById(card.getEmployeeId())
                 .orElseThrow(() -> new NotFoundException("Employee not found: " + card.getEmployeeId()));
+        Company company = companyRepository.findById(employee.getCompanyId())
+                .orElseThrow(() -> new NotFoundException("Company not found: " + employee.getCompanyId()));
         Merchant merchant = merchantRepository.findById(tx.getMerchantId())
                 .orElseThrow(() -> new NotFoundException("Merchant not found: " + tx.getMerchantId()));
 
         return new FlagDetailResponse(
-                flag.getId(), tx.getId(), employee.getFullName(), merchant.getName(), merchant.getCategory(),
+                flag.getId(), tx.getId(), employee.getFullName(), company.getName(), merchant.getName(), merchant.getCategory(),
                 tx.getAmount(), tx.getCurrency(), tx.getOccurredAt(), flag.getRuleScore(), flag.getAiRiskScore(),
                 flag.getSemanticMismatch(), flag.getAiExplanation(), flag.getFinalScore(), flag.getStatus(),
                 // Stored at scoring time, not recomputed live - see the Javadoc on TransactionFlag.
@@ -129,5 +136,10 @@ public class FlagController {
     private Map<Long, Merchant> loadMerchants(Collection<Transaction> transactions) {
         Set<Long> ids = transactions.stream().map(Transaction::getMerchantId).collect(Collectors.toSet());
         return merchantRepository.findAllById(ids).stream().collect(Collectors.toMap(Merchant::getId, m -> m));
+    }
+
+    private Map<Long, Company> loadCompanies(Collection<Employee> employees) {
+        Set<Long> ids = employees.stream().map(Employee::getCompanyId).collect(Collectors.toSet());
+        return companyRepository.findAllById(ids).stream().collect(Collectors.toMap(Company::getId, c -> c));
     }
 }

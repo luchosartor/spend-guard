@@ -1,5 +1,6 @@
 package com.spendguard.web;
 
+import com.spendguard.ai.FraudAiReviewer;
 import com.spendguard.detection.ScoringResult;
 import com.spendguard.detection.TransactionScoringService;
 import com.spendguard.domain.Card;
@@ -19,9 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
  * purely descriptive metadata the seed generator attaches for later recall measurement; the rule
  * engine and AI reviewer never see them.
  *
- * <p>Both public overloads below are annotated {@code @Transactional} directly and contain the full
- * persist+score logic themselves (no delegating to each other via {@code this.}) - a self-invoked
- * call bypasses Spring's transactional proxy entirely, so a prior version of this class that had
+ * <p>Every public overload below is annotated {@code @Transactional} directly and contains the full
+ * persist+score logic itself (no delegating to each other via {@code this.}) - a self-invoked call
+ * bypasses Spring's transactional proxy entirely, so a prior version of this class that had
  * {@code ingest(request)} call {@code this.ingest(request, false, null)} ran with no transaction
  * boundary at all on the real API path.
  */
@@ -36,16 +37,30 @@ public class TransactionIngestService {
 
     @Transactional
     public IngestResponse ingest(TransactionRequest request) {
-        return doIngest(request, false, null);
+        return doIngest(request, false, null, null);
     }
 
     /** Used by the seed generator to tag a planted anomaly; the real endpoint always calls {@link #ingest(TransactionRequest)}. */
     @Transactional
     public IngestResponse ingest(TransactionRequest request, boolean plantedAnomaly, PlantedType plantedType) {
-        return doIngest(request, plantedAnomaly, plantedType);
+        return doIngest(request, plantedAnomaly, plantedType, null);
     }
 
-    private IngestResponse doIngest(TransactionRequest request, boolean plantedAnomaly, PlantedType plantedType) {
+    /** Used by the seed generator's AI mode picker to route escalations to a specific reviewer for this one run. */
+    @Transactional
+    public IngestResponse ingest(TransactionRequest request, boolean plantedAnomaly, PlantedType plantedType,
+            FraudAiReviewer reviewerOverride) {
+        return doIngest(request, plantedAnomaly, plantedType, reviewerOverride);
+    }
+
+    /** Same as above, for the seed generator's normal (non-planted) history transactions. */
+    @Transactional
+    public IngestResponse ingest(TransactionRequest request, FraudAiReviewer reviewerOverride) {
+        return doIngest(request, false, null, reviewerOverride);
+    }
+
+    private IngestResponse doIngest(TransactionRequest request, boolean plantedAnomaly, PlantedType plantedType,
+            FraudAiReviewer reviewerOverride) {
         Card card = cardRepository.findByEmployeeId(request.employeeId()).stream()
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("No card found for employee " + request.employeeId()));
@@ -70,7 +85,7 @@ public class TransactionIngestService {
                 .build();
         transaction = transactionRepository.save(transaction);
 
-        ScoringResult result = scoringService.score(transaction);
+        ScoringResult result = scoringService.score(transaction, reviewerOverride);
         return new IngestResponse(transaction.getId(), result.flagged(), result.flagId());
     }
 }

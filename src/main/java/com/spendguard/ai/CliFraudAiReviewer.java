@@ -102,6 +102,14 @@ public class CliFraudAiReviewer implements FraudAiReviewer {
         ProcessBuilder processBuilder = new ProcessBuilder(
                 "claude", "-p", prompt, "--output-format", "text", "--model", model);
         processBuilder.redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
+        // ProcessBuilder inherits this JVM's full environment by default. If ANTHROPIC_API_KEY is
+        // set (e.g. the api provider is also configured, or it leaked in from the shell that
+        // launched this process), the claude CLI prefers it over the logged-in session - silently
+        // billing through the API key instead of the subscription this provider exists to use.
+        // The whole point of the cli provider is to work without an API key, so strip it here
+        // rather than rely on every caller remembering to keep it out of this process's env.
+        processBuilder.environment().remove("ANTHROPIC_API_KEY");
+        processBuilder.environment().remove("ANTHROPIC_AUTH_TOKEN");
         return processBuilder;
     }
 

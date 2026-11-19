@@ -21,7 +21,12 @@ public class ApiFraudAiReviewer implements FraudAiReviewer {
 
     private static final URI MESSAGES_URI = URI.create("https://api.anthropic.com/v1/messages");
     private static final String ANTHROPIC_VERSION = "2023-06-01";
-    private static final int MAX_TOKENS = 300;
+    // Sonnet 5.5 / Opus 5.5 always think before answering and can't have thinking disabled - at
+    // 300 this regularly ran out of budget mid-thought, truncating the JSON before the closing
+    // quote and burning the call for nothing (every escalation falls back to rule-only). Paired
+    // with output_config.effort=low below (bounded classification, not open-ended reasoning) to
+    // keep thinking short in the first place rather than just raising the ceiling on it.
+    private static final int MAX_TOKENS = 1024;
 
     private final AiProperties aiProperties;
     private final HttpClient httpClient;
@@ -49,6 +54,7 @@ public class ApiFraudAiReviewer implements FraudAiReviewer {
             String requestBody = mapper.writeValueAsString(Map.of(
                     "model", context.model(),
                     "max_tokens", MAX_TOKENS,
+                    "output_config", Map.of("effort", "low"),
                     "messages", List.of(Map.of("role", "user", "content", prompt))));
 
             HttpRequest request = HttpRequest.newBuilder()
