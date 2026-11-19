@@ -19,7 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ApiFraudAiReviewer implements FraudAiReviewer {
 
-    private static final URI MESSAGES_URI = URI.create("https://api.anthropic.com/v1/messages");
+    private static final URI DEFAULT_MESSAGES_URI = URI.create("https://api.anthropic.com/v1/messages");
     private static final String ANTHROPIC_VERSION = "2023-06-01";
     // Sonnet 5.5 / Opus 5.5 always think before answering and can't have thinking disabled - at
     // 300 this regularly ran out of budget mid-thought, truncating the JSON before the closing
@@ -29,12 +29,19 @@ public class ApiFraudAiReviewer implements FraudAiReviewer {
     private static final int MAX_TOKENS = 1024;
 
     private final AiProperties aiProperties;
+    private final URI messagesUri;
     private final HttpClient httpClient;
     private final ObjectMapper mapper = new ObjectMapper();
     private boolean warnedMissingKey = false;
 
     public ApiFraudAiReviewer(AiProperties aiProperties) {
+        this(aiProperties, DEFAULT_MESSAGES_URI);
+    }
+
+    /** Package-visible so a test can point this at a local stub server instead of the real API. */
+    ApiFraudAiReviewer(AiProperties aiProperties, URI messagesUri) {
         this.aiProperties = aiProperties;
+        this.messagesUri = messagesUri;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
     }
 
@@ -58,7 +65,7 @@ public class ApiFraudAiReviewer implements FraudAiReviewer {
                     "messages", List.of(Map.of("role", "user", "content", prompt))));
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(MESSAGES_URI)
+                    .uri(messagesUri)
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", ANTHROPIC_VERSION)
                     .header("content-type", "application/json")
