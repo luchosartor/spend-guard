@@ -239,7 +239,8 @@
     color: var(--fg-muted);
     margin-top: 2px;
   }
-  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  .table-scroll { overflow-x: auto; margin-top: 14px; }
+  table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 13px; }
   th {
     text-align: left;
     font-size: 11px;
@@ -250,7 +251,9 @@
     padding: 0 8px 8px 0;
     border-bottom: 1px solid var(--border);
   }
-  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+  td.who { white-space: normal; }
+  tr.why-row td { white-space: normal; }
   td:first-child, th:first-child { padding-left: 0; }
   td.mono { font-family: "IBM Plex Mono", monospace; }
   td.score-cell .final { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 14px; }
@@ -326,12 +329,14 @@
     <section class="card" id="result-card" hidden>
       <h2>Result</h2>
       <div class="stats" id="result-stats"></div>
-      <table id="result-table">
-        <thead>
-          <tr><th>Plan</th><th>Planted anomaly</th><th>Outcome</th></tr>
-        </thead>
-        <tbody id="result-rows"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="result-table">
+          <thead>
+            <tr><th>Plan</th><th>Planted anomaly</th><th>Outcome</th></tr>
+          </thead>
+          <tbody id="result-rows"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 
@@ -353,12 +358,14 @@
 
       <div class="status-line" id="flags-loading"><span class="spinner"></span><span>Loading…</span></div>
       <p class="note" id="flags-empty" hidden>No flags with this status. Run the seed first if the queue is empty.</p>
-      <table id="flags-table" hidden>
-        <thead>
-          <tr><th>Score</th><th>Transaction</th><th>Amount</th><th>Occurred</th><th></th></tr>
-        </thead>
-        <tbody id="flags-rows"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="flags-table" hidden>
+          <thead>
+            <tr><th>Score</th><th>Transaction</th><th>Amount</th><th>Occurred</th><th></th></tr>
+          </thead>
+          <tbody id="flags-rows"></tbody>
+        </table>
+      </div>
       <div id="flags-error"></div>
     </section>
   </div>
