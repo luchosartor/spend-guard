@@ -25,13 +25,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private static final String COST_FREE = "$0 - rule-only scoring, no AI call made.";
-    private static final String COST_API = "~$0.50-0.70 for a full run (~100 Claude API calls at "
-            + "claude-sonnet-5-5/claude-opus-5-5 pricing).";
+    // Wider than a naive token-count estimate: Sonnet 5.5/Opus 5.5 always run a reasoning step
+    // before answering, and measured real runs cost more and ran longer than first estimated -
+    // this range reflects what actually happened, not a theoretical best case.
+    private static final String COST_API = "~$0.50-1.00 for a full run (~100 Claude API calls at "
+            + "claude-sonnet-5-5/claude-opus-5-5 pricing, each including its own reasoning step).";
     private static final String COST_CLI = "No direct Anthropic API charge - uses the local Claude Code CLI, "
             + "subject to that plan's usage limits.";
 
     private static final String DURATION_FREE = "~10-20 seconds.";
-    private static final String DURATION_API = "~2-5 minutes (around 100 sequential calls to Claude).";
+    private static final String DURATION_API = "~3-9 minutes (around 100 sequential calls to Claude, each "
+            + "including its own reasoning step).";
     private static final String DURATION_CLI = "~5-15 minutes (each call shells out to the CLI, slower than a "
             + "direct API call).";
 

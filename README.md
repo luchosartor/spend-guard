@@ -68,7 +68,7 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 
 **Combining the two:** `final_score = max(rule_score, ai_risk_score)` if the AI ran, else `final_score = rule_score`. A flag is created only if `final_score >= 50`.
 
-**AI cost per escalated transaction** (Anthropic list pricing; `MAX_TOKENS=300` caps the output, actual output is usually smaller since the response is a short JSON object):
+**AI cost per escalated transaction** (Anthropic list pricing; `MAX_TOKENS=1024` caps the output, actual usage is normally well under that since `output_config.effort=low` keeps the model's reasoning step short):
 
 | Plan | Model | Input $/1M tok | Output $/1M tok | Approx. cost per call |
 |---|---|---|---|---|
@@ -76,6 +76,8 @@ Rule engine, 0-100 per transaction (capped), each signal computed against that e
 | `PREMIUM` | `claude-opus-5-5` | $4.00 | $20.00 | ~$0.008 (~2x `STANDARD`) |
 
 The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier) model is a real cost/depth trade-off per plan, not just a label.
+
+**Why `effort=low` and a 1024-token ceiling, not the 300 this started with.** Sonnet 5.5 and Opus 5.5 always run a reasoning step before answering and can't have it disabled — at `MAX_TOKENS=300` with no `effort` set, that reasoning step regularly ate the whole budget mid-thought, truncating the JSON response before its closing quote. Measured on two real runs: 28 of ~100 calls failed to parse for exactly this reason, each one billed for nothing (falls back to rule-only for that transaction). `effort=low` is the right fit for a bounded classification task like this one (not open-ended reasoning) and keeps the reasoning step short in the first place, with the higher ceiling as a backstop so a longer explanation still fits.
 
 ## What's intentionally left out (and why)
 
