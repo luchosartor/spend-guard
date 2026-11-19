@@ -192,6 +192,21 @@
   button.approve { background: var(--ok); color: var(--ok-bg); }
   button.reject { background: var(--warn); color: var(--warn-bg); }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .mode-option { display: flex; flex-direction: column; gap: 6px; }
+  .mode-btn {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+  }
+  .mode-btn.selected { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .mode-meta { font-size: 12px; color: var(--fg-muted); margin: 0; }
+  .mode-meta.unavailable { color: var(--warn); }
   .confirm-box {
     margin-top: 14px;
     padding: 14px 16px;
@@ -333,20 +348,23 @@
       <p>Wipes and regenerates two demo companies with synthetic spend history and one planted anomaly of each type.</p>
     </header>
 
-    <section class="card" id="info-card">
-      <h2>Before you run it</h2>
-      <div class="row"><span class="label">AI provider</span><span class="value"><span class="pill" id="info-provider">—</span></span></div>
-      <div class="row"><span class="label">Estimated cost</span><span class="value" id="info-cost">—</span></div>
-      <div class="row"><span class="label">Estimated time</span><span class="value" id="info-duration">—</span></div>
-      <p class="note" id="info-note"></p>
-    </section>
-
     <section class="card">
-      <h2>Run</h2>
-      <div class="actions">
-        <button id="run-btn" type="button">Run seed</button>
-        <span class="status-line" id="run-status" hidden><span class="spinner"></span><span id="run-status-text"></span></span>
+      <h2>Run with</h2>
+      <div class="mode-grid" id="mode-grid">
+        <div class="mode-option">
+          <button class="mode-btn" id="mode-btn-api" type="button" data-mode="api">API</button>
+          <p class="mode-meta" id="mode-meta-api">Checking…</p>
+        </div>
+        <div class="mode-option">
+          <button class="mode-btn" id="mode-btn-cli" type="button" data-mode="cli">CLI</button>
+          <p class="mode-meta" id="mode-meta-cli">Checking…</p>
+        </div>
+        <div class="mode-option">
+          <button class="mode-btn" id="mode-btn-none" type="button" data-mode="none">None</button>
+          <p class="mode-meta" id="mode-meta-none">Checking…</p>
+        </div>
       </div>
+      <span class="status-line" id="run-status" hidden><span class="spinner"></span><span id="run-status-text"></span></span>
       <div class="confirm-box" id="confirm-box" hidden>
         <p id="confirm-text"></p>
         <div class="actions">
@@ -444,11 +462,8 @@
   tabFlags.addEventListener("click", function () { showView("flags"); });
 
   // ---------- seed screen ----------
-  var infoProvider = document.getElementById("info-provider");
-  var infoCost = document.getElementById("info-cost");
-  var infoDuration = document.getElementById("info-duration");
-  var infoNote = document.getElementById("info-note");
-  var runBtn = document.getElementById("run-btn");
+  var modeButtons = { api: document.getElementById("mode-btn-api"), cli: document.getElementById("mode-btn-cli"), none: document.getElementById("mode-btn-none") };
+  var modeMetas = { api: document.getElementById("mode-meta-api"), cli: document.getElementById("mode-meta-cli"), none: document.getElementById("mode-meta-none") };
   var runStatus = document.getElementById("run-status");
   var runStatusText = document.getElementById("run-status-text");
   var runError = document.getElementById("run-error");
@@ -460,13 +475,13 @@
   var resultStats = document.getElementById("result-stats");
   var resultRows = document.getElementById("result-rows");
 
-  var currentDuration = "a little while";
+  var modeDurations = { api: "a few minutes", cli: "several minutes", none: "a little while" };
 
   function setBusy(busy, label) {
-    runBtn.disabled = busy;
+    Object.keys(modeButtons).forEach(function (m) { modeButtons[m].disabled = busy; });
     confirmBtn.disabled = busy;
     runStatus.hidden = !busy;
-    if (busy) runStatusText.textContent = label || ("Running — this can take " + currentDuration + "...");
+    if (busy) runStatusText.textContent = label;
   }
 
   function showRunError(message) {
@@ -481,16 +496,16 @@
     fetch("/api/admin/seed-info")
       .then(function (r) { return r.json(); })
       .then(function (info) {
-        infoProvider.textContent = info.provider;
-        infoCost.textContent = info.estimated_cost;
-        infoDuration.textContent = info.estimated_duration;
-        infoNote.textContent = info.note;
-        currentDuration = info.estimated_duration;
+        ["api", "cli", "none"].forEach(function (mode) {
+          var opt = info[mode];
+          modeButtons[mode].disabled = !opt.available;
+          modeMetas[mode].textContent = opt.available ? (opt.estimated_cost + " " + opt.estimated_duration) : opt.unavailable_reason;
+          modeMetas[mode].classList.toggle("unavailable", !opt.available);
+          modeDurations[mode] = opt.estimated_duration;
+        });
       })
       .catch(function () {
-        infoProvider.textContent = "unknown";
-        infoCost.textContent = "could not load";
-        infoDuration.textContent = "could not load";
+        ["api", "cli", "none"].forEach(function (mode) { modeMetas[mode].textContent = "Could not load."; });
       });
   }
 
@@ -516,10 +531,10 @@
     resultCard.hidden = false;
   }
 
-  function runSeed(confirm) {
+  function runSeed(mode, confirm) {
     clearRunError();
-    setBusy(true);
-    var url = "/api/admin/seed" + (confirm ? "?confirm=true" : "");
+    setBusy(true, "Running with " + mode.toUpperCase() + " - this can take " + modeDurations[mode] + "...");
+    var url = "/api/admin/seed?mode=" + encodeURIComponent(mode) + (confirm ? "&confirm=true" : "");
     fetch(url, { method: "POST" })
       .then(function (r) { return r.json().then(function (body) { return { status: r.status, body: body }; }); })
       .then(function (res) {
@@ -530,8 +545,9 @@
         } else if (res.status === 428) {
           confirmText.textContent = res.body.warning + " " + res.body.how_to_proceed;
           confirmBox.hidden = false;
+          confirmBtn.onclick = function () { runSeed(mode, true); };
         } else {
-          showRunError("Unexpected response (" + res.status + ").");
+          showRunError((res.body && res.body.error) || ("Unexpected response (" + res.status + ")."));
         }
       })
       .catch(function () {
@@ -540,8 +556,9 @@
       });
   }
 
-  runBtn.addEventListener("click", function () { runSeed(false); });
-  confirmBtn.addEventListener("click", function () { runSeed(true); });
+  Object.keys(modeButtons).forEach(function (mode) {
+    modeButtons[mode].addEventListener("click", function () { runSeed(mode, false); });
+  });
   cancelBtn.addEventListener("click", function () { confirmBox.hidden = true; });
 
   // ---------- flag queue ----------

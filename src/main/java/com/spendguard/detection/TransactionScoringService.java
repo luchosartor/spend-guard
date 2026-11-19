@@ -55,6 +55,25 @@ public class TransactionScoringService {
 
     @Transactional
     public ScoringResult score(Transaction transaction) {
+        return doScore(transaction, null);
+    }
+
+    /**
+     * Same scoring logic, but escalations go to {@code reviewerOverride} instead of the
+     * statically-configured {@link #fraudAiReviewer} - used by the seed endpoint's per-run AI mode
+     * picker. Real transaction traffic never passes an override.
+     *
+     * <p>A separate {@code @Transactional} method calling the same private helper, not a self-call
+     * to {@link #score(Transaction)} - see {@link com.spendguard.web.TransactionIngestService}'s
+     * Javadoc for why a self-invocation here would silently run outside any transaction.
+     */
+    @Transactional
+    public ScoringResult score(Transaction transaction, FraudAiReviewer reviewerOverride) {
+        return doScore(transaction, reviewerOverride);
+    }
+
+    private ScoringResult doScore(Transaction transaction, FraudAiReviewer reviewerOverride) {
+        FraudAiReviewer reviewer = reviewerOverride != null ? reviewerOverride : fraudAiReviewer;
         ScoringContext ctx = buildContext(transaction);
         RuleSignals signals = ruleEngine.evaluate(ctx.input());
 
@@ -79,7 +98,7 @@ public class TransactionScoringService {
         if (escalate) {
             String summary = buildSpendingSummary(ctx.priorHistory());
             ReviewContext reviewContext = new ReviewContext(transaction, ctx.employee(), ctx.merchant(), signals, summary, model);
-            AiReviewResult aiResult = fraudAiReviewer.review(reviewContext);
+            AiReviewResult aiResult = reviewer.review(reviewContext);
             if (aiResult.aiRiskScore() != null) {
                 aiRiskScore = aiResult.aiRiskScore();
                 semanticMismatch = aiResult.semanticMismatch();

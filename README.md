@@ -27,7 +27,7 @@ docker compose up -d spend-guard-db   # just Postgres, on localhost:5433
 
 CI (`.github/workflows/ci.yml`) compiles and runs the unit test suite on every push/PR.
 
-Try it: `POST /api/admin/seed` to populate synthetic data (2 companies, one of each planted anomaly type), then `GET /api/flags` for the priority queue.
+Try it: `POST /api/admin/seed?mode=none|cli|api` to populate synthetic data (2 companies, one of each planted anomaly type), then `GET /api/flags` for the priority queue. `mode` picks which AI reviewer this one run uses — independent of `spendguard.ai.provider`, so switching between a free rule-only run, the CLI, and the real API never requires restarting the app. `mode=api` with a key configured needs `&confirm=true` (see the cost gate below); `GET /api/admin/seed-info` reports cost/time estimates and availability for all three modes up front.
 
 ## Development workflow: `coder` / `leader` agents
 
@@ -46,6 +46,7 @@ The planning session (this conversation) writes the brief, `coder` implements it
 - Per-company pricing tier (`STANDARD`/`PREMIUM`) controls both the escalation threshold and which model gets called — real, working "deeper analysis for bigger clients."
 - A priority queue (`GET /api/flags`) and an analyst approve/reject workflow (`POST /api/flags/{id}/resolve`). `APPROVED` means the analyst cleared the transaction as legitimate (false positive); `REJECTED` means they confirmed it as fraud.
 - A synthetic data generator with one planted anomaly of each type and measurable recall (`caught: true/false` per plant), all routed through the same ingest path real data would use.
+- A minimal frontend (served at `/`, no build step): a seed screen with a per-run AI mode picker (API/CLI/none, each showing its own cost/time estimate and greyed out when unavailable) and a flag queue tab to review and clear/confirm-fraud pending flags.
 - Fully containerized (Postgres + API), Java 21 throughout, zero manual JDK install anywhere.
 
 ## Detection rules
@@ -76,7 +77,7 @@ The lower escalation threshold for `PREMIUM` plus the stronger (and ~2x pricier)
 
 ## What's intentionally left out (and why)
 
-- **Frontend.** Deliberately deferred — backend is what's being evaluated. The one screen it needs, when built: before running the seed, show the estimated cost and time (differs by `api`/`cli` provider) and what to expect caught/missed with AI configured vs. not; require an explicit confirm click before it can spend real credits (same intent as `/api/admin/seed`'s `?confirm=true` gate); then render the result once the run finishes.
+- **A richer frontend** (charts, multi-page navigation, auth-gated views). What's built is deliberately minimal — two tabs, no framework, no build step — because the backend is what's being evaluated.
 - **Auth, multi-tenant isolation beyond the company FK, pagination.** This is a single-analyst review tool for the exercise, not a multi-customer SaaS product — adding auth wouldn't have demonstrated anything about the detection problem itself.
 - **Feedback/retraining loop.** Capturing an analyst's approve/reject decision is already free (it's just a field on the flag). *Using* that history to recalibrate rule weights, or feeding the AI prompt few-shot examples of past verdicts, is a real follow-up project on its own — not built.
 - **Full boundary-value test matrix.** The core boundaries (z-score thresholds, the 5-history-item cutoff, identical-timestamp duplicates) are tested; every signal's window boundary (10 min / 30 min / 3 h, both sides) isn't.

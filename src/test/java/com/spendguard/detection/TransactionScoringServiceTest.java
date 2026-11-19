@@ -58,6 +58,8 @@ class TransactionScoringServiceTest {
     private TransactionFlagRepository transactionFlagRepository;
     @Mock
     private FraudAiReviewer fraudAiReviewer;
+    @Mock
+    private FraudAiReviewer overrideReviewer;
 
     private TransactionScoringService service;
 
@@ -103,6 +105,24 @@ class TransactionScoringServiceTest {
         service.score(transaction);
 
         verify(fraudAiReviewer).review(any());
+    }
+
+    @Test
+    void reviewerOverride_isUsedInsteadOfTheDefaultReviewer() {
+        Transaction transaction = transactionAgainst(merchant);
+        Transaction priorWithOtherMerchant = Transaction.builder().id(2L).cardId(1L).merchantId(999L)
+                .amount(new BigDecimal("40.00")).currency("USD")
+                .occurredAt(now.minus(Duration.ofDays(10))).country("US").build();
+
+        stubCommonLookups(List.of(priorWithOtherMerchant));
+        when(transactionRepository.existsByCardIdInAndMerchantIdAndOccurredAtBefore(List.of(1L), 500L, now))
+                .thenReturn(false); // novel merchant -> escalates via Fix-1 regardless of ruleScore
+        when(overrideReviewer.review(any())).thenReturn(AiReviewResult.unavailable("test"));
+
+        service.score(transaction, overrideReviewer);
+
+        verify(overrideReviewer).review(any());
+        verify(fraudAiReviewer, never()).review(any());
     }
 
     @Test

@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import com.spendguard.ai.AiMode;
+import com.spendguard.ai.ApiFraudAiReviewer;
+import com.spendguard.ai.CliFraudAiReviewer;
+import com.spendguard.ai.FraudAiReviewer;
+import com.spendguard.ai.NoOpFraudAiReviewer;
 import com.spendguard.domain.Card;
 import com.spendguard.domain.Company;
 import com.spendguard.domain.CompanyPlan;
@@ -96,14 +101,25 @@ public class SeedDataService {
     private final TransactionRepository transactionRepository;
     private final TransactionFlagRepository transactionFlagRepository;
     private final TransactionIngestService ingestService;
+    private final ApiFraudAiReviewer apiFraudAiReviewer;
+    private final CliFraudAiReviewer cliFraudAiReviewer;
+    private final NoOpFraudAiReviewer noOpFraudAiReviewer;
 
     /**
      * Not atomic and not safe to call concurrently: each {@code ingest()} call below commits its
      * own transaction independently (see {@link TransactionIngestService}), so a run that's
      * interrupted partway through leaves a partially-regenerated dataset rather than rolling back
      * cleanly. Acceptable for this demo-only, single-operator endpoint.
+     *
+     * @param mode which {@link FraudAiReviewer} every escalation in this run uses - picked per run
+     *             by the seed endpoint's caller, independent of {@code spendguard.ai.provider}.
      */
-    public SeedRunResult seed() {
+    public SeedRunResult seed(AiMode mode) {
+        FraudAiReviewer reviewer = switch (mode) {
+            case API -> apiFraudAiReviewer;
+            case CLI -> cliFraudAiReviewer;
+            case NONE -> noOpFraudAiReviewer;
+        };
         wipeAll();
 
         Random random = new Random(RANDOM_SEED);
@@ -134,13 +150,13 @@ public class SeedDataService {
             for (Employee employee : employees) {
                 Map<MerchantCategory, CategoryBaseline> baseline = randomBaseline(random);
                 baselinesByEmployee.put(employee.getId(), baseline);
-                generateHistory(employee, baseline, normalMerchants, historyStart, historyEnd, random);
+                generateHistory(employee, baseline, normalMerchants, historyStart, historyEnd, random, reviewer);
             }
 
             Employee anomalyEmployee = employees.get(0);
             Map<MerchantCategory, CategoryBaseline> anomalyBaseline = baselinesByEmployee.get(anomalyEmployee.getId());
             plantedOutcomes.addAll(plantAnomalies(
-                    anomalyEmployee, anomalyBaseline, normalMerchants, semanticMismatchMerchant, company.getPlan(), now));
+                    anomalyEmployee, anomalyBaseline, normalMerchants, semanticMismatchMerchant, company.getPlan(), now, reviewer));
         }
 
         int totalTransactions = (int) transactionRepository.count();
@@ -215,7 +231,7 @@ public class SeedDataService {
     /** A handful of normal transactions per week, drawn from the employee's own per-category baseline. */
     private void generateHistory(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
                                    Map<MerchantCategory, Merchant> normalMerchants,
-                                   Instant historyStart, Instant historyEnd, Random random) {
+                                   Instant historyStart, Instant historyEnd, Random random, FraudAiReviewer reviewer) {
         // Only categories that actually have a merchant + baseline set up (not every MerchantCategory
         // value - OTHER, for instance, is a real-world MCC catch-all with no demo merchant behind it).
         MerchantCategory[] categories = normalMerchants.keySet().toArray(new MerchantCategory[0]);
@@ -230,7 +246,7 @@ public class SeedDataService {
                 Instant occurredAt = randomBusinessTimestamp(weekStart, random, historyEnd);
 
                 ingestService.ingest(new TransactionRequest(
-                        employee.getId(), merchant.getId(), amount, "USD", occurredAt, merchant.getCountry()));
+                        employee.getId(), merchant.getId(), amount, "USD", occurredAt, merchant.getCountry()), reviewer);
             }
         }
     }
@@ -262,19 +278,19 @@ public class SeedDataService {
     private List<PlantedAnomalyOutcome> plantAnomalies(
             Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
             Map<MerchantCategory, Merchant> normalMerchants, Merchant semanticMismatchMerchant,
-            CompanyPlan plan, Instant now) {
+            CompanyPlan plan, Instant now, FraudAiReviewer reviewer) {
 
         Instant t0 = now.minus(Duration.ofDays(5));
         List<PlantedAnomalyOutcome> outcomes = new ArrayList<>();
-        outcomes.add(plantAmountOutlier(employee, baseline, normalMerchants, plan, t0));
-        outcomes.add(plantVelocity(employee, baseline, normalMerchants, plan, t0.plus(Duration.ofHours(4))));
-        outcomes.add(plantDuplicate(employee, baseline, normalMerchants, plan, t0.plus(Duration.ofHours(8))));
-        outcomes.add(plantGeoFirstInCountry(employee, normalMerchants, baseline, plan, t0.plus(Duration.ofHours(12))));
+        outcomes.add(plantAmountOutlier(employee, baseline, normalMerchants, plan, t0, reviewer));
+        outcomes.add(plantVelocity(employee, baseline, normalMerchants, plan, t0.plus(Duration.ofHours(4)), reviewer));
+        outcomes.add(plantDuplicate(employee, baseline, normalMerchants, plan, t0.plus(Duration.ofHours(8)), reviewer));
+        outcomes.add(plantGeoFirstInCountry(employee, normalMerchants, baseline, plan, t0.plus(Duration.ofHours(12)), reviewer));
         // Comfortably more than 3h after the geo plant's own transaction, so policy's own 3h
         // impossible-travel lookback never sees that different-country row and picks up stray
         // geo points on top of its own signal.
-        outcomes.add(plantPolicy(employee, normalMerchants, plan, t0.plus(Duration.ofHours(18))));
-        outcomes.add(plantSemanticMismatch(employee, baseline, semanticMismatchMerchant, plan, t0.plus(Duration.ofHours(22))));
+        outcomes.add(plantPolicy(employee, normalMerchants, plan, t0.plus(Duration.ofHours(18)), reviewer));
+        outcomes.add(plantSemanticMismatch(employee, baseline, semanticMismatchMerchant, plan, t0.plus(Duration.ofHours(22)), reviewer));
         return outcomes;
     }
 
@@ -285,7 +301,8 @@ public class SeedDataService {
      * is familiar (used throughout normal history), so escalation here is purely threshold-driven.
      */
     private PlantedAnomalyOutcome plantAmountOutlier(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
-                                                       Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at) {
+                                                       Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at,
+                                                       FraudAiReviewer reviewer) {
         MerchantCategory category = MerchantCategory.SOFTWARE;
         Merchant merchant = normalMerchants.get(category);
         CategoryBaseline categoryBaseline = baseline.get(category);
@@ -294,7 +311,7 @@ public class SeedDataService {
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), merchant.getId(), amount, "USD", at, merchant.getCountry()),
-                true, PlantedType.AMOUNT_OUTLIER);
+                true, PlantedType.AMOUNT_OUTLIER, reviewer);
         return outcomeFor(response, PlantedType.AMOUNT_OUTLIER, plan);
     }
 
@@ -307,20 +324,21 @@ public class SeedDataService {
      * amount z-score for an employee whose baseline happens to sit far from a fixed dollar figure.
      */
     private PlantedAnomalyOutcome plantVelocity(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
-                                                  Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at) {
+                                                  Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at,
+                                                  FraudAiReviewer reviewer) {
         Merchant merchant = normalMerchants.get(MerchantCategory.MEALS);
         CategoryBaseline mealsBaseline = baseline.get(MerchantCategory.MEALS);
 
         ingestService.ingest(new TransactionRequest(
-                employee.getId(), merchant.getId(), scaledAmount(mealsBaseline, 0.95), "USD", at, merchant.getCountry()));
+                employee.getId(), merchant.getId(), scaledAmount(mealsBaseline, 0.95), "USD", at, merchant.getCountry()), reviewer);
         ingestService.ingest(new TransactionRequest(
                 employee.getId(), merchant.getId(), scaledAmount(mealsBaseline, 1.05), "USD",
-                at.plus(Duration.ofMinutes(3)), merchant.getCountry()));
+                at.plus(Duration.ofMinutes(3)), merchant.getCountry()), reviewer);
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), merchant.getId(), scaledAmount(mealsBaseline, 1.0), "USD",
                         at.plus(Duration.ofMinutes(6)), merchant.getCountry()),
-                true, PlantedType.VELOCITY);
+                true, PlantedType.VELOCITY, reviewer);
         return outcomeFor(response, PlantedType.VELOCITY, plan);
     }
 
@@ -332,17 +350,18 @@ public class SeedDataService {
      * so there's one derived amount here, not a +-5% spread like velocity's three charges).
      */
     private PlantedAnomalyOutcome plantDuplicate(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
-                                                   Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at) {
+                                                   Map<MerchantCategory, Merchant> normalMerchants, CompanyPlan plan, Instant at,
+                                                   FraudAiReviewer reviewer) {
         Merchant merchant = normalMerchants.get(MerchantCategory.TRANSPORT);
         BigDecimal amount = scaledAmount(baseline.get(MerchantCategory.TRANSPORT), 1.0);
 
         ingestService.ingest(new TransactionRequest(
-                employee.getId(), merchant.getId(), amount, "USD", at, merchant.getCountry()));
+                employee.getId(), merchant.getId(), amount, "USD", at, merchant.getCountry()), reviewer);
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), merchant.getId(), amount, "USD",
                         at.plus(Duration.ofMinutes(15)), merchant.getCountry()),
-                true, PlantedType.DUPLICATE);
+                true, PlantedType.DUPLICATE, reviewer);
         return outcomeFor(response, PlantedType.DUPLICATE, plan);
     }
 
@@ -361,13 +380,14 @@ public class SeedDataService {
      * scenario per company, is the tiered-depth story this plant demonstrates.
      */
     private PlantedAnomalyOutcome plantGeoFirstInCountry(Employee employee, Map<MerchantCategory, Merchant> normalMerchants,
-                                             Map<MerchantCategory, CategoryBaseline> baseline, CompanyPlan plan, Instant at) {
+                                             Map<MerchantCategory, CategoryBaseline> baseline, CompanyPlan plan, Instant at,
+                                             FraudAiReviewer reviewer) {
         Merchant merchant = normalMerchants.get(MerchantCategory.TRANSPORT);
         BigDecimal amount = scaledAmount(baseline.get(MerchantCategory.TRANSPORT), 1.0);
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), merchant.getId(), amount, "USD", at, "FR"),
-                true, PlantedType.GEO);
+                true, PlantedType.GEO, reviewer);
         return outcomeFor(response, PlantedType.GEO, plan);
     }
 
@@ -378,13 +398,13 @@ public class SeedDataService {
      * thresholds; familiar merchant, so this is threshold-driven, not novelty-driven.
      */
     private PlantedAnomalyOutcome plantPolicy(Employee employee, Map<MerchantCategory, Merchant> normalMerchants,
-                                                CompanyPlan plan, Instant at) {
+                                                CompanyPlan plan, Instant at, FraudAiReviewer reviewer) {
         Merchant merchant = normalMerchants.get(MerchantCategory.OFFICE);
         BigDecimal amount = merchant.getPolicyLimit().multiply(new BigDecimal("1.5")).setScale(2, RoundingMode.HALF_UP);
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), merchant.getId(), amount, "USD", at, merchant.getCountry()),
-                true, PlantedType.POLICY);
+                true, PlantedType.POLICY, reviewer);
         return outcomeFor(response, PlantedType.POLICY, plan);
     }
 
@@ -400,14 +420,15 @@ public class SeedDataService {
      * expected, correct behavior of this exact scenario without AI - it's not a bug in detection.
      */
     private PlantedAnomalyOutcome plantSemanticMismatch(Employee employee, Map<MerchantCategory, CategoryBaseline> baseline,
-                                                          Merchant semanticMismatchMerchant, CompanyPlan plan, Instant at) {
+                                                          Merchant semanticMismatchMerchant, CompanyPlan plan, Instant at,
+                                                          FraudAiReviewer reviewer) {
         CategoryBaseline officeBaseline = baseline.get(MerchantCategory.OFFICE);
         BigDecimal amount = BigDecimal.valueOf(officeBaseline.mean()).setScale(2, RoundingMode.HALF_UP);
 
         IngestResponse response = ingestService.ingest(
                 new TransactionRequest(employee.getId(), semanticMismatchMerchant.getId(), amount, "USD",
                         at, semanticMismatchMerchant.getCountry()),
-                true, PlantedType.SEMANTIC_MISMATCH);
+                true, PlantedType.SEMANTIC_MISMATCH, reviewer);
         return outcomeFor(response, PlantedType.SEMANTIC_MISMATCH, plan);
     }
 
