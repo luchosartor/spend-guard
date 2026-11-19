@@ -647,7 +647,7 @@
 
     var whoCol = document.createElement("div");
     whoCol.className = "col-who";
-    whoCol.innerHTML = escapeHtml(flag.employee_name) + '<div class="merchant-sub">'
+    whoCol.innerHTML = escapeHtml(flag.employee_name) + " (" + escapeHtml(flag.company_name) + ')<div class="merchant-sub">'
       + escapeHtml(flag.merchant_name) + " · " + escapeHtml(flag.category) + "</div>";
 
     var amountCol = document.createElement("div");

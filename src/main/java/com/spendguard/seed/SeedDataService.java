@@ -5,6 +5,8 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -58,9 +60,18 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SeedDataService {
 
+    /**
+     * A pool bigger than any one company needs (8 employees x 2 companies = 16), drawn from
+     * without replacement across the whole run (see {@code seed()}) - without that, every company
+     * reusing this same fixed list by position would give company A's and company B's first
+     * employee the identical name, which looks like one person being flagged twice in the queue
+     * when they're actually two different {@code Employee} rows.
+     */
     private static final String[] EMPLOYEE_NAMES = {
             "Jordan Lee", "Taylor Chen", "Morgan Diaz", "Casey Kim",
-            "Riley Patel", "Avery Brooks", "Hayden Reyes", "Quinn Walsh"
+            "Riley Patel", "Avery Brooks", "Hayden Reyes", "Quinn Walsh",
+            "Sydney Ortiz", "Drew Nakamura", "Charlie Okafor", "Reese Ferraro",
+            "Skyler Novak", "Jamie Alvarado", "Peyton Lindqvist", "Emerson Castillo"
     };
     private static final String[] DEPARTMENTS = {
             "Sales", "Engineering", "Marketing", "Finance",
@@ -123,6 +134,8 @@ public class SeedDataService {
         wipeAll();
 
         Random random = new Random(RANDOM_SEED);
+        List<String> namePool = new ArrayList<>(Arrays.asList(EMPLOYEE_NAMES));
+        Collections.shuffle(namePool, random);
         Map<MerchantCategory, Merchant> normalMerchants = createNormalMerchants();
         Merchant semanticMismatchMerchant = createSemanticMismatchMerchant();
         int merchantsCreated = normalMerchants.size() + 1;
@@ -143,7 +156,7 @@ public class SeedDataService {
         List<PlantedAnomalyOutcome> plantedOutcomes = new ArrayList<>();
 
         for (Company company : companies) {
-            List<Employee> employees = createEmployees(company, random);
+            List<Employee> employees = createEmployees(company, random, namePool);
             employeesCreated += employees.size();
 
             Map<Long, Map<MerchantCategory, CategoryBaseline>> baselinesByEmployee = new HashMap<>();
@@ -199,12 +212,15 @@ public class SeedDataService {
                 .build());
     }
 
-    private List<Employee> createEmployees(Company company, Random random) {
+    private List<Employee> createEmployees(Company company, Random random, List<String> namePool) {
         List<Employee> employees = new ArrayList<>();
-        for (int i = 0; i < EMPLOYEE_NAMES.length; i++) {
+        for (int i = 0; i < DEPARTMENTS.length; i++) {
+            // Drawn from the front of the shared, pre-shuffled pool - removing as we go, so no two
+            // employees across either company ever end up with the same name.
+            String name = namePool.remove(0);
             Employee employee = employeeRepository.save(Employee.builder()
                     .companyId(company.getId())
-                    .fullName(EMPLOYEE_NAMES[i])
+                    .fullName(name)
                     .department(DEPARTMENTS[i])
                     .role(ROLES[i])
                     .build());

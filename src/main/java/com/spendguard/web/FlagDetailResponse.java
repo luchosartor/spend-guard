@@ -11,6 +11,7 @@ public record FlagDetailResponse(
         Long id,
         Long transactionId,
         String employeeName,
+        String companyName,
         String merchantName,
         MerchantCategory category,
         BigDecimal amount,
