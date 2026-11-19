@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spend Guard — Seed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Layout: single scanning column — status, then action, then result; no hero, this is a tool, not a pitch. */
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #dde1e7;
+    --fg: #14171f;
+    --fg-muted: #5b6270;
+    --accent: #2a3eb1;
+    --accent-fg: #ffffff;
+    --ok: #157a4a;
+    --ok-bg: #e4f5ec;
+    --warn: #9a5b00;
+    --warn-bg: #fdeeda;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10131a;
+      --surface: #171b24;
+      --border: #2a2f3b;
+      --fg: #eef0f4;
+      --fg-muted: #9aa1b0;
+      --accent: #7b8cf0;
+      --accent-fg: #0d1020;
+      --ok: #6fd9a4;
+      --ok-bg: #123524;
+      --warn: #f0b85b;
+      --warn-bg: #3a2a0f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10131a;
+    --surface: #171b24;
+    --border: #2a2f3b;
+    --fg: #eef0f4;
+    --fg-muted: #9aa1b0;
+    --accent: #7b8cf0;
+    --accent-fg: #0d1020;
+    --ok: #6fd9a4;
+    --ok-bg: #123524;
+    --warn: #f0b85b;
+    --warn-bg: #3a2a0f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 32px 16px 64px;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+    text-wrap: balance;
+  }
+  header p {
+    margin: 0;
+    color: var(--fg-muted);
+    font-size: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg-muted);
+    margin: 0 0 12px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: var(--fg-muted); min-width: 0; }
+  .row .value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    text-align: right;
+    min-width: 0;
+  }
+  .pill {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: var(--border);
+    color: var(--fg);
+  }
+  .note {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--fg-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 18px;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button.secondary {
+    background: transparent;
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+  }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .confirm-box {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: 13px;
+  }
+  .confirm-box p { margin: 0 0 10px; }
+  .confirm-box .actions { margin-top: 10px; }
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--fg-muted);
+  }
+  .spinner {
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+  }
+  .stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .stat .n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .label {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-top: 2px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg-muted);
+    font-weight: 600;
+    padding: 0 8px 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border); }
+  td:first-child, th:first-child { padding-left: 0; }
+  td.type { font-family: "IBM Plex Mono", monospace; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 100px;
+  }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .error {
+    font-size: 13px;
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Spend Guard — Seed</h1>
+    <p>Wipes and regenerates two demo companies with synthetic spend history and one planted anomaly of each type.</p>
+  </header>
+
+  <section class="card" id="info-card">
+    <h2>Before you run it</h2>
+    <div class="row"><span class="label">AI provider</span><span class="value"><span class="pill" id="info-provider">—</span></span></div>
+    <div class="row"><span class="label">Estimated cost</span><span class="value" id="info-cost">—</span></div>
+    <div class="row"><span class="label">Estimated time</span><span class="value" id="info-duration">—</span></div>
+    <p class="note" id="info-note"></p>
+  </section>
+
+  <section class="card">
+    <h2>Run</h2>
+    <div class="actions">
+      <button id="run-btn" type="button">Run seed</button>
+      <span class="status-line" id="run-status" hidden><span class="spinner"></span><span id="run-status-text"></span></span>
+    </div>
+    <div class="confirm-box" id="confirm-box" hidden>
+      <p id="confirm-text"></p>
+      <div class="actions">
+        <button id="confirm-btn" type="button">Confirm and run</button>
+        <button class="secondary" id="cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>
+    <div id="run-error"></div>
+  </section>
+
+  <section class="card" id="result-card" hidden>
+    <h2>Result</h2>
+    <div class="stats" id="result-stats"></div>
+    <table id="result-table">
+      <thead>
+        <tr><th>Plan</th><th>Planted anomaly</th><th>Outcome</th></tr>
+      </thead>
+      <tbody id="result-rows"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var infoProvider = document.getElementById("info-provider");
+  var infoCost = document.getElementById("info-cost");
+  var infoDuration = document.getElementById("info-duration");
+  var infoNote = document.getElementById("info-note");
+  var runBtn = document.getElementById("run-btn");
+  var runStatus = document.getElementById("run-status");
+  var runStatusText = document.getElementById("run-status-text");
+  var runError = document.getElementById("run-error");
+  var confirmBox = document.getElementById("confirm-box");
+  var confirmText = document.getElementById("confirm-text");
+  var confirmBtn = document.getElementById("confirm-btn");
+  var cancelBtn = document.getElementById("cancel-btn");
+  var resultCard = document.getElementById("result-card");
+  var resultStats = document.getElementById("result-stats");
+  var resultRows = document.getElementById("result-rows");
+
+  var currentDuration = "a little while";
+
+  function setBusy(busy, label) {
+    runBtn.disabled = busy;
+    confirmBtn.disabled = busy;
+    runStatus.hidden = !busy;
+    if (busy) runStatusText.textContent = label || ("Running — this can take " + currentDuration + "...");
+  }
+
+  function showError(message) {
+    runError.innerHTML = '<div class="error">' + escapeHtml(message) + "</div>";
+  }
+
+  function clearError() {
+    runError.innerHTML = "";
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function loadInfo() {
+    fetch("/api/admin/seed-info")
+      .then(function (r) { return r.json(); })
+      .then(function (info) {
+        infoProvider.textContent = info.provider;
+        infoCost.textContent = info.estimated_cost;
+        infoDuration.textContent = info.estimated_duration;
+        infoNote.textContent = info.note;
+        currentDuration = info.estimated_duration;
+      })
+      .catch(function () {
+        infoProvider.textContent = "unknown";
+        infoCost.textContent = "could not load";
+        infoDuration.textContent = "could not load";
+      });
+  }
+
+  function renderResult(result) {
+    var stats = [
+      ["Companies", result.companies_created],
+      ["Employees", result.employees_created],
+      ["Merchants", result.merchants_created],
+      ["Transactions", result.total_transactions],
+      ["Flags", result.total_flags]
+    ];
+    resultStats.innerHTML = stats.map(function (s) {
+      return '<div class="stat"><div class="n">' + s[1] + '</div><div class="label">' + s[0] + "</div></div>";
+    }).join("");
+
+    resultRows.innerHTML = result.planted_anomalies.map(function (a) {
+      var chip = a.caught
+        ? '<span class="chip ok">Caught</span>'
+        : '<span class="chip warn">Not caught</span>';
+      return "<tr><td>" + a.company_plan + '</td><td class="type">' + a.planted_type + "</td><td>" + chip + "</td></tr>";
+    }).join("");
+
+    resultCard.hidden = false;
+  }
+
+  function runSeed(confirm) {
+    clearError();
+    setBusy(true);
+    var url = "/api/admin/seed" + (confirm ? "?confirm=true" : "");
+    fetch(url, { method: "POST" })
+      .then(function (r) { return r.json().then(function (body) { return { status: r.status, body: body }; }); })
+      .then(function (res) {
+        setBusy(false);
+        if (res.status === 200) {
+          confirmBox.hidden = true;
+          renderResult(res.body);
+        } else if (res.status === 428) {
+          confirmText.textContent = res.body.warning + " " + res.body.how_to_proceed;
+          confirmBox.hidden = false;
+        } else {
+          showError("Unexpected response (" + res.status + ").");
+        }
+      })
+      .catch(function () {
+        setBusy(false);
+        showError("Could not reach the API. Is the app running?");
+      });
+  }
+
+  runBtn.addEventListener("click", function () { runSeed(false); });
+  confirmBtn.addEventListener("click", function () { runSeed(true); });
+  cancelBtn.addEventListener("click", function () { confirmBox.hidden = true; });
+
+  loadInfo();
+})();
+</script>
+</body>
+</html>
